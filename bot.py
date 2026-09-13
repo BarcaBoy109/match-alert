@@ -18,12 +18,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("barca-bot")
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
+TEAM_ID = os.getenv("TEAM_ID", "83")
+TEAM_NAME = os.getenv("TEAM_NAME", "FC Barcelona")
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 PORT = int(os.getenv("PORT", "8080"))
 
-# ESPN's public scoreboard endpoint. Barcelona's ESPN team id is 83.
+# ESPN's public scoreboard endpoint. TEAM_ID selects the team to monitor.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 
 
@@ -101,12 +103,12 @@ def event_name(event: dict) -> str:
     competition = event["competitions"][0]
     competitors = competition["competitors"]
     names = {item["homeAway"]: item["team"]["displayName"] for item in competitors}
-    return f"{names.get('home', 'Barcelona')} vs {names.get('away', 'opponent')}"
+    return f"{names.get('home', TEAM_NAME)} vs {names.get('away', 'opponent')}"
 
 
 @app_commands.command(
     name="setchannel",
-    description="Choose where FC Barcelona match alerts are posted.",
+    description="Choose where match alerts are posted.",
 )
 @app_commands.describe(channel="The text channel for match alerts")
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -147,12 +149,12 @@ async def setrole_command(interaction: discord.Interaction, role: discord.Role) 
     )
 
 
-@app_commands.command(name="nextmatch", description="Show Barcelona's next match in the next 7 days.")
+@app_commands.command(name="nextmatch", description="Show the configured team's next match in the next 7 days.")
 async def nextmatch_command(interaction: discord.Interaction) -> None:
     match = await fetch_next_match()
     if not match:
         await interaction.response.send_message(
-            "No FC Barcelona men's first-team match was found in the next 7 days.", ephemeral=True
+            f"No {TEAM_NAME} match was found in the next 7 days.", ephemeral=True
         )
         return
     timestamp = kickoff_unix(match)
@@ -181,8 +183,10 @@ async def fetch_next_match() -> dict | None:
         except (KeyError, ValueError):
             continue
         competitors = event.get("competitions", [{}])[0].get("competitors", [])
-        is_barcelona = any(str(item.get("team", {}).get("id")) == "83" for item in competitors)
-        if now < start <= cutoff and is_barcelona:
+        is_configured_team = any(
+            str(item.get("team", {}).get("id")) == TEAM_ID for item in competitors
+        )
+        if now < start <= cutoff and is_configured_team:
             upcoming.append(event)
     return min(upcoming, key=lambda item: item["date"]) if upcoming else None
 
@@ -228,7 +232,7 @@ class BarcelonaBot(commands.Bot):
             try:
                 await owner.send(
                     f"Thanks for adding me to **{guild.name}**! "
-                    "Use `/setchannel` in a server channel to choose where Barcelona match alerts should be posted."
+                    "Use `/setchannel` in a server channel to choose where match alerts should be posted."
                 )
             except discord.Forbidden:
                 logger.info("Could not DM the owner of %s", guild.name)
@@ -258,7 +262,7 @@ class BarcelonaBot(commands.Bot):
                 role_id = guild_state.get("role_id")
                 role_mention = f"<@&{role_id}> " if role_id else ""
                 await channel.send(
-                    f"{role_mention}FC Barcelona match incoming: **{event_name(match)}**\n"
+                    f"{role_mention}{TEAM_NAME} match incoming: **{event_name(match)}**\n"
                     f"Kickoff: <t:{timestamp}:t>"
                 )
                 sent_any = True

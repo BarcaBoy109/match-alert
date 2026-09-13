@@ -1,6 +1,26 @@
-# Barcelona Match Alert Bot
+# Match Alert Discord Bot
 
-A public Discord bot that polls FC Barcelona's men's first-team schedule and posts alerts in each server's configured channel.
+A public Discord bot that polls a configured soccer team's schedule and posts alerts in each server's configured channel. It defaults to FC Barcelona.
+
+## Configure another team
+
+The monitored team is configured with environment variables near the top of `bot.py`:
+
+```env
+TEAM_ID=83
+TEAM_NAME=FC Barcelona
+```
+
+`TEAM_ID` is the team's ESPN ID. `TEAM_NAME` is the display name used in command responses and fallback text. The bot checks ESPN's soccer scoreboard for events involving that team ID.
+
+To switch teams:
+
+1. Find the team on ESPN's website and open its team page.
+2. Copy the numeric ID from the team page URL or ESPN API data. For example, Barcelona uses ID `83`.
+3. Set `TEAM_ID` and `TEAM_NAME` in `.env` locally or in your hosting provider's environment variables.
+4. Restart or redeploy the bot.
+
+The bot is currently designed for soccer teams because it uses ESPN's soccer scoreboard endpoint. Cup and league fixtures are included when ESPN lists them in the scoreboard feed.
 
 The kickoff is formatted with Discord's short time timestamp, for example:
 
@@ -25,7 +45,7 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-The bot checks every 10 minutes by default. After adding it to a server, a server administrator runs `/setchannel` and selects the announcement channel. Optionally run `/setrole` to choose the role to mention. Server-specific settings and duplicate-announcement state are stored in `state.json`. The schedule source is ESPN's public FC Barcelona schedule endpoint.
+The bot checks every 10 minutes by default. After adding it to a server, a server administrator runs `/setchannel` and selects the announcement channel. Optionally run `/setrole` to choose the role to mention. Server-specific settings and duplicate-announcement state are stored in `state.json` when no database is configured. The schedule source is ESPN's public soccer scoreboard endpoint.
 
 ## Remote hosting with Supabase and Railway
 
