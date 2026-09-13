@@ -20,9 +20,7 @@ POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 
 # ESPN's public scoreboard endpoint. Barcelona's ESPN team id is 83.
-SCHEDULE_URL = (
-    "https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/barcelona/schedule"
-)
+SCHEDULE_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/83/schedule"
 
 
 def load_state() -> dict:
