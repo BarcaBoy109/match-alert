@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
@@ -145,6 +145,21 @@ async def setrole_command(interaction: discord.Interaction, role: discord.Role) 
     )
 
 
+@app_commands.command(name="nextmatch", description="Show Barcelona's next match in the next 7 days.")
+async def nextmatch_command(interaction: discord.Interaction) -> None:
+    match = await fetch_next_match()
+    if not match:
+        await interaction.response.send_message(
+            "No FC Barcelona men's first-team match was found in the next 7 days.", ephemeral=True
+        )
+        return
+    timestamp = kickoff_unix(match)
+    await interaction.response.send_message(
+        f"Next match: **{event_name(match)}**\nKickoff: <t:{timestamp}:t> (<t:{timestamp}:R>)",
+        ephemeral=True,
+    )
+
+
 async def fetch_next_match() -> dict | None:
     timeout = aiohttp.ClientTimeout(total=20)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -153,13 +168,14 @@ async def fetch_next_match() -> dict | None:
             payload = await response.json()
 
     now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=7)
     upcoming = []
     for event in payload.get("events", []):
         try:
             start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
         except (KeyError, ValueError):
             continue
-        if start > now and event.get("competitions"):
+        if now < start <= cutoff and event.get("competitions"):
             upcoming.append(event)
     return min(upcoming, key=lambda item: item["date"]) if upcoming else None
 
@@ -171,6 +187,7 @@ class BarcelonaBot(commands.Bot):
         self.store = StateStore()
         self.tree.add_command(setchannel_command)
         self.tree.add_command(setrole_command)
+        self.tree.add_command(nextmatch_command)
         self._commands_synced = False
 
     async def setup_hook(self) -> None:
