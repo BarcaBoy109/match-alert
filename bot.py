@@ -22,7 +22,7 @@ STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ESPN's public scoreboard endpoint. Barcelona's ESPN team id is 83.
-SCHEDULE_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/83/schedule"
+SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 
 
 def load_state() -> dict:
@@ -162,20 +162,25 @@ async def nextmatch_command(interaction: discord.Interaction) -> None:
 
 async def fetch_next_match() -> dict | None:
     timeout = aiohttp.ClientTimeout(total=20)
+    now = datetime.now(timezone.utc)
+    cutoff = now + timedelta(days=7)
+    date_range = f"{now:%Y%m%d}-{cutoff:%Y%m%d}"
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(SCHEDULE_URL, params={"limit": 20}) as response:
+        async with session.get(
+            SCOREBOARD_URL, params={"limit": 500, "dates": date_range}
+        ) as response:
             response.raise_for_status()
             payload = await response.json()
 
-    now = datetime.now(timezone.utc)
-    cutoff = now + timedelta(days=7)
     upcoming = []
     for event in payload.get("events", []):
         try:
             start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
         except (KeyError, ValueError):
             continue
-        if now < start <= cutoff and event.get("competitions"):
+        competitors = event.get("competitions", [{}])[0].get("competitors", [])
+        is_barcelona = any(str(item.get("team", {}).get("id")) == "83" for item in competitors)
+        if now < start <= cutoff and is_barcelona:
             upcoming.append(event)
     return min(upcoming, key=lambda item: item["date"]) if upcoming else None
 
