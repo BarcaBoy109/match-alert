@@ -116,9 +116,10 @@ async def setchannel_command(interaction: discord.Interaction, channel: discord.
     bot = interaction.client
     if not isinstance(bot, BarcelonaBot):
         return
+    await interaction.response.defer(ephemeral=True)
     await bot.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
-    await interaction.response.send_message(
-        f"Match alerts will be posted in {channel.mention}.", ephemeral=True
+    await interaction.edit_original_response(
+        content=f"Match alerts will be posted in {channel.mention}."
     )
 
 
@@ -143,25 +144,32 @@ async def setrole_command(interaction: discord.Interaction, role: discord.Role) 
     bot = interaction.client
     if not isinstance(bot, BarcelonaBot):
         return
+    await interaction.response.defer(ephemeral=True)
     await bot.store.set_guild_value(interaction.guild_id, "role_id", role.id)
-    await interaction.response.send_message(
-        f"I will mention {role.mention} in match alerts.", ephemeral=True
+    await interaction.edit_original_response(
+        content=f"I will mention {role.mention} in match alerts."
     )
 
 
 @app_commands.command(name="nextmatch", description="Show the configured team's next match in the next 7 days.")
 async def nextmatch_command(interaction: discord.Interaction) -> None:
-    match = await fetch_next_match()
-    if not match:
-        await interaction.response.send_message(
-            f"No {TEAM_NAME} match was found in the next 7 days.", ephemeral=True
+    await interaction.response.defer(ephemeral=True)
+    try:
+        match = await fetch_next_match()
+        if not match:
+            content = f"No {TEAM_NAME} match was found in the next 7 days."
+        else:
+            timestamp = kickoff_unix(match)
+            content = (
+                f"Next match: **{event_name(match)}**\n"
+                f"Kickoff: <t:{timestamp}:t> (<t:{timestamp}:R>)"
+            )
+        await interaction.edit_original_response(content=content)
+    except Exception:
+        logger.exception("/nextmatch failed")
+        await interaction.edit_original_response(
+            content="I could not fetch the fixture right now. Check the bot logs for details."
         )
-        return
-    timestamp = kickoff_unix(match)
-    await interaction.response.send_message(
-        f"Next match: **{event_name(match)}**\nKickoff: <t:{timestamp}:t> (<t:{timestamp}:R>)",
-        ephemeral=True,
-    )
 
 
 async def fetch_next_match() -> dict | None:
