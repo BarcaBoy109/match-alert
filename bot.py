@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
+from aiohttp import web
 import asyncpg
 import discord
 from discord.ext import commands, tasks
@@ -20,6 +21,7 @@ DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
+PORT = int(os.getenv("PORT", "8080"))
 
 # ESPN's public scoreboard endpoint. Barcelona's ESPN team id is 83.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
@@ -185,6 +187,10 @@ async def fetch_next_match() -> dict | None:
     return min(upcoming, key=lambda item: item["date"]) if upcoming else None
 
 
+async def health(request: web.Request) -> web.Response:
+    return web.json_response({"ok": True, "service": "match-alert"})
+
+
 class BarcelonaBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -194,9 +200,16 @@ class BarcelonaBot(commands.Bot):
         self.tree.add_command(setrole_command)
         self.tree.add_command(nextmatch_command)
         self._commands_synced = False
+        self.health_runner: web.AppRunner | None = None
 
     async def setup_hook(self) -> None:
         await self.store.connect()
+        app = web.Application()
+        app.router.add_get("/", health)
+        app.router.add_get("/health", health)
+        self.health_runner = web.AppRunner(app)
+        await self.health_runner.setup()
+        await web.TCPSite(self.health_runner, "0.0.0.0", PORT).start()
         await self.tree.sync()
         self.poll_schedule.start()
 
