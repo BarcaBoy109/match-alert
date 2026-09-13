@@ -102,6 +102,49 @@ def event_name(event: dict) -> str:
     return f"{names.get('home', 'Barcelona')} vs {names.get('away', 'opponent')}"
 
 
+@app_commands.command(
+    name="setchannel",
+    description="Choose where FC Barcelona match alerts are posted.",
+)
+@app_commands.describe(channel="The text channel for match alerts")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def setchannel_command(interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+    bot = interaction.client
+    if not isinstance(bot, BarcelonaBot):
+        return
+    await bot.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
+    await interaction.response.send_message(
+        f"Match alerts will be posted in {channel.mention}.", ephemeral=True
+    )
+
+
+@setchannel_command.error
+async def setchannel_command_error(
+    interaction: discord.Interaction, error: app_commands.AppCommandError
+) -> None:
+    if isinstance(error, app_commands.MissingPermissions):
+        await interaction.response.send_message(
+            "You need the **Manage Server** permission to configure this bot.", ephemeral=True
+        )
+    else:
+        logger.exception("/setchannel failed", exc_info=error)
+        if not interaction.response.is_done():
+            await interaction.response.send_message("Something went wrong.", ephemeral=True)
+
+
+@app_commands.command(name="setrole", description="Choose the role to mention in match alerts.")
+@app_commands.describe(role="The role to mention")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def setrole_command(interaction: discord.Interaction, role: discord.Role) -> None:
+    bot = interaction.client
+    if not isinstance(bot, BarcelonaBot):
+        return
+    await bot.store.set_guild_value(interaction.guild_id, "role_id", role.id)
+    await interaction.response.send_message(
+        f"I will mention {role.mention} in match alerts.", ephemeral=True
+    )
+
+
 async def fetch_next_match() -> dict | None:
     timeout = aiohttp.ClientTimeout(total=20)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -126,8 +169,8 @@ class BarcelonaBot(commands.Bot):
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
         self.store = StateStore()
-        self.tree.add_command(self.setchannel)
-        self.tree.add_command(self.setrole)
+        self.tree.add_command(setchannel_command)
+        self.tree.add_command(setrole_command)
         self._commands_synced = False
 
     async def setup_hook(self) -> None:
@@ -154,40 +197,6 @@ class BarcelonaBot(commands.Bot):
                 )
             except discord.Forbidden:
                 logger.info("Could not DM the owner of %s", guild.name)
-
-    @app_commands.command(
-        name="setchannel",
-        description="Choose where FC Barcelona match alerts are posted.",
-    )
-    @app_commands.describe(channel="The text channel for match alerts")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def setchannel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
-        await self.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
-        await interaction.response.send_message(
-            f"Match alerts will be posted in {channel.mention}.", ephemeral=True
-        )
-
-    @setchannel.error
-    async def setchannel_error(
-        interaction: discord.Interaction, error: app_commands.AppCommandError
-    ) -> None:
-        if isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message(
-                "You need the **Manage Server** permission to configure this bot.", ephemeral=True
-            )
-        else:
-            logger.exception("/setchannel failed", exc_info=error)
-            if not interaction.response.is_done():
-                await interaction.response.send_message("Something went wrong.", ephemeral=True)
-
-    @app_commands.command(name="setrole", description="Choose the role to mention in match alerts.")
-    @app_commands.describe(role="The role to mention")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def setrole(self, interaction: discord.Interaction, role: discord.Role) -> None:
-        await self.store.set_guild_value(interaction.guild_id, "role_id", role.id)
-        await interaction.response.send_message(
-            f"I will mention {role.mention} in match alerts.", ephemeral=True
-        )
 
     @tasks.loop(minutes=POLL_MINUTES)
     async def poll_schedule(self) -> None:
