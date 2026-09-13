@@ -117,7 +117,7 @@ class BarcelonaBot(commands.Bot):
 
     @setchannel.error
     async def setchannel_error(
-        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+        interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(
