@@ -162,7 +162,7 @@ async def nextmatch_command(interaction: discord.Interaction) -> None:
             timestamp = kickoff_unix(match)
             content = (
                 f"Next match: **{event_name(match)}**\n"
-                f"Kickoff: <t:{timestamp}:t> (<t:{timestamp}:R>)"
+                f"Kickoff: <t:{timestamp}:T> (<t:{timestamp}:R>)"
             )
         await interaction.edit_original_response(content=content)
     except Exception:
