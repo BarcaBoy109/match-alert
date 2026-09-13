@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiohttp
+import asyncpg
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -18,6 +19,7 @@ logger = logging.getLogger("barca-bot")
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ESPN's public scoreboard endpoint. Barcelona's ESPN team id is 83.
 SCHEDULE_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/teams/83/schedule"
@@ -35,6 +37,57 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
+
+
+class StateStore:
+    """Use Supabase Postgres in production, with JSON as a local fallback."""
+
+    def __init__(self) -> None:
+        self.pool: asyncpg.Pool | None = None
+        self.local_state = load_state()
+
+    async def connect(self) -> None:
+        if DATABASE_URL:
+            self.pool = await asyncpg.create_pool(DATABASE_URL, ssl="require", min_size=1, max_size=3)
+
+    async def get_guild(self, guild_id: int) -> dict:
+        if self.pool:
+            row = await self.pool.fetchrow(
+                "SELECT channel_id, role_id FROM guild_settings WHERE guild_id = $1", guild_id
+            )
+            return dict(row) if row else {}
+        return self.local_state.get("guilds", {}).get(str(guild_id), {})
+
+    async def set_guild_value(self, guild_id: int, key: str, value: int) -> None:
+        if self.pool:
+            await self.pool.execute(
+                f"""INSERT INTO guild_settings (guild_id, {key}) VALUES ($1, $2)
+                ON CONFLICT (guild_id) DO UPDATE SET {key} = EXCLUDED.{key}""",
+                guild_id,
+                value,
+            )
+            return
+        guild_state = self.local_state.setdefault("guilds", {}).setdefault(str(guild_id), {})
+        guild_state[key] = value
+        save_state(self.local_state)
+
+    async def has_announced(self, match_id: str) -> bool:
+        if self.pool:
+            return await self.pool.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM announced_matches WHERE match_id = $1)", match_id
+            )
+        return match_id in self.local_state.get("announced_matches", [])
+
+    async def mark_announced(self, match_id: str) -> None:
+        if self.pool:
+            await self.pool.execute(
+                "INSERT INTO announced_matches (match_id) VALUES ($1) ON CONFLICT DO NOTHING", match_id
+            )
+            return
+        matches = self.local_state.setdefault("announced_matches", [])
+        matches.append(match_id)
+        self.local_state["announced_matches"] = matches[-50:]
+        save_state(self.local_state)
 
 
 def kickoff_unix(event: dict) -> int:
@@ -72,12 +125,13 @@ class BarcelonaBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
-        self.state = load_state()
+        self.store = StateStore()
         self.tree.add_command(self.setchannel)
         self.tree.add_command(self.setrole)
         self._commands_synced = False
 
     async def setup_hook(self) -> None:
+        await self.store.connect()
         await self.tree.sync()
         self.poll_schedule.start()
 
@@ -108,9 +162,7 @@ class BarcelonaBot(commands.Bot):
     @app_commands.describe(channel="The text channel for match alerts")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setchannel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
-        guild_state = self.state.setdefault("guilds", {}).setdefault(str(interaction.guild_id), {})
-        guild_state["channel_id"] = channel.id
-        save_state(self.state)
+        await self.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
         await interaction.response.send_message(
             f"Match alerts will be posted in {channel.mention}.", ephemeral=True
         )
@@ -132,9 +184,7 @@ class BarcelonaBot(commands.Bot):
     @app_commands.describe(role="The role to mention")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setrole(self, interaction: discord.Interaction, role: discord.Role) -> None:
-        guild_state = self.state.setdefault("guilds", {}).setdefault(str(interaction.guild_id), {})
-        guild_state["role_id"] = role.id
-        save_state(self.state)
+        await self.store.set_guild_value(interaction.guild_id, "role_id", role.id)
         await interaction.response.send_message(
             f"I will mention {role.mention} in match alerts.", ephemeral=True
         )
@@ -147,12 +197,13 @@ class BarcelonaBot(commands.Bot):
                 return
 
             match_id = str(match["id"])
-            if match_id in self.state.get("announced_matches", []):
+            if await self.store.has_announced(match_id):
                 return
 
             timestamp = kickoff_unix(match)
+            sent_any = False
             for guild in self.guilds:
-                guild_state = self.state.get("guilds", {}).get(str(guild.id), {})
+                guild_state = await self.store.get_guild(guild.id)
                 channel_id = guild_state.get("channel_id")
                 if not channel_id:
                     continue
@@ -166,10 +217,10 @@ class BarcelonaBot(commands.Bot):
                     f"{role_mention}FC Barcelona match incoming: **{event_name(match)}**\n"
                     f"Kickoff: <t:{timestamp}:t>"
                 )
+                sent_any = True
 
-            self.state.setdefault("announced_matches", []).append(match_id)
-            self.state["announced_matches"] = self.state["announced_matches"][-50:]
-            save_state(self.state)
+            if sent_any:
+                await self.store.mark_announced(match_id)
             logger.info("Announced %s", event_name(match))
         except Exception:
             logger.exception("Schedule poll failed")
