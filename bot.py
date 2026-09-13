@@ -73,6 +73,9 @@ class BarcelonaBot(commands.Bot):
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
         self.state = load_state()
+        self.tree.add_command(self.setchannel)
+        self.tree.add_command(self.setrole)
+        self._commands_synced = False
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -80,6 +83,12 @@ class BarcelonaBot(commands.Bot):
 
     async def on_ready(self) -> None:
         logger.info("Logged in as %s", self.user)
+        if not self._commands_synced:
+            for guild in self.guilds:
+                self.tree.copy_global_to(guild=guild)
+                await self.tree.sync(guild=guild)
+            self._commands_synced = True
+            logger.info("Synced slash commands to %d server(s)", len(self.guilds))
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         owner = guild.owner
