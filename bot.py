@@ -315,7 +315,7 @@ class BarcelonaBot(commands.Bot):
                 role_mention = f"<@&{role_id}> " if role_id else ""
                 await channel.send(
                     f"{role_mention}{team_name} match incoming: **{event_name(match)}**\n"
-                    f"Kickoff: <t:{timestamp}:f>"
+                    f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                 )
                 await self.store.mark_announced(str(match["id"]), guild.id)
                 logger.info("Announced %s in %s", event_name(match), guild.name)
