@@ -2,6 +2,8 @@
 
 A public Discord bot that polls a configured soccer team's schedule and posts alerts in each server's configured channel. It defaults to FC Barcelona.
 
+[![Invite Match Alert to Discord](https://img.shields.io/badge/Invite%20Match%20Alert-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1548667872451100682&permissions=19456&integration_type=0&scope=bot%20applications.commands)
+
 ## Configure the team
 
 Each Discord server can choose its own team from the supported clubs in Europe's
