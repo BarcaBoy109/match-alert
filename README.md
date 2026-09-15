@@ -2,7 +2,25 @@
 
 A public Discord bot that polls a configured soccer team's schedule and posts alerts in each server's configured channel. It defaults to FC Barcelona.
 
-## Configure another team
+## Configure the team
+
+Each Discord server can choose its own team from the supported clubs in Europe's
+top five domestic leagues: the Premier League, La Liga, Bundesliga, Serie A,
+and Ligue 1. A server administrator selects the team with:
+
+```text
+/configure team:Real Madrid
+```
+
+The selection is stored per server and uses the club's canonical ESPN ID. Names
+are matched case-insensitively, and `/nextmatch` plus scheduled alerts use the
+server's selected team.
+
+Use `/configure` before `/setchannel` if setting up a new server. For example,
+`/configure team:Real Madrid` stores ESPN ID `86`.
+
+If a server has never been configured, the bot falls back to the environment
+defaults below (FC Barcelona, ESPN ID `83`).
 
 The monitored team is configured with environment variables near the top of `bot.py`:
 
@@ -11,14 +29,8 @@ TEAM_ID=83
 TEAM_NAME=FC Barcelona
 ```
 
-`TEAM_ID` is the team's ESPN ID. `TEAM_NAME` is the display name used in command responses and fallback text. The bot checks ESPN's soccer scoreboard for events involving that team ID.
-
-To switch teams:
-
-1. Find the team on ESPN's website and open its team page.
-2. Copy the numeric ID from the team page URL or ESPN API data. For example, Barcelona uses ID `83`.
-3. Set `TEAM_ID` and `TEAM_NAME` in `.env` locally or in your hosting provider's environment variables.
-4. Restart or redeploy the bot.
+`TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not used
+`/configure`; they are not required for changing an already configured server.
 
 The bot is currently designed for soccer teams because it uses ESPN's soccer scoreboard endpoint. Cup and league fixtures are included when ESPN lists them in the scoreboard feed.
 
