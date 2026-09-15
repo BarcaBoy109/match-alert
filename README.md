@@ -1,78 +1,41 @@
 # Match Alert Discord Bot
 
-A public Discord bot that polls a configured soccer team's schedule and posts alerts in each server's configured channel. It defaults to FC Barcelona.
+A Discord bot that monitors soccer fixtures and posts match alerts in a configured channel. Each server can choose a favourite team and save additional teams for alerts. It defaults to FC Barcelona.
 
 [![Invite Match Alert to Discord](https://img.shields.io/badge/Invite%20Match%20Alert-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1548667872451100682&permissions=19456&integration_type=0&scope=bot%20applications.commands)
 
-## Configure the team
+## Discord commands
 
-Each Discord server can choose its own teams from the supported clubs in Europe's
-top five domestic leagues: the Premier League, La Liga, Bundesliga, Serie A,
-and Ligue 1. A server administrator selects the favourite team with:
+Team names are matched case-insensitively. The supported clubs are from the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1.
+
+| Command | Use |
+| --- | --- |
+| `/configure team:<name>` | Set the server's favourite team and ensure it receives alerts. Existing alert teams are kept. Requires Manage Server. |
+| `/addteam team:<name>` | Add another team to this server's alerts. Requires Manage Server. |
+| `/removeteam team:<name>` | Remove a non-favourite team from alerts. Requires Manage Server. |
+| `/teams` | List saved alert teams and identify the favourite. |
+| `/nextmatch` | Show the favourite team's next match within seven days. |
+| `/nextmatch team:<name>` | Check another supported team's next match without changing settings. |
+| `/setchannel channel:<channel>` | Choose where alerts are posted. Requires Manage Server. |
+| `/setrole role:<role>` | Choose the role mentioned in alerts. Requires Manage Server. |
+
+Example:
 
 ```text
 /configure team:Real Madrid
-```
-
-The favourite is included in alerts. Additional teams can then be managed with:
-
-```text
 /addteam team:Arsenal
-/removeteam team:Arsenal
+/addteam team:PSG
 /teams
 ```
 
-The favourite cannot be removed from alerts until `/configure` is used to select
-a different favourite. Changing it does not remove any other saved teams. The
-selections are stored per server and use the clubs' canonical ESPN IDs. Names
-are matched case-insensitively.
-Scheduled alerts use all of the server's selected teams, while `/nextmatch`
-without an option continues to use the favourite team selected by `/configure`.
-To check another supported club without changing the favourite, pass its name
-to `/nextmatch`:
+The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club.
 
-```text
-/nextmatch team:Real Madrid
-```
-
-The `team` option is optional, so `/nextmatch` by itself shows the favourite
-team's next fixture.
-
-Use `/configure` before `/setchannel` if setting up a new server. For example,
-`/configure team:Real Madrid` stores ESPN ID `86`.
-
-If a server has never been configured, the bot falls back to the environment
-defaults below (FC Barcelona, ESPN ID `83`).
-
-The monitored team is configured with environment variables near the top of `bot.py`:
-
-```env
-TEAM_ID=83
-TEAM_NAME=FC Barcelona
-```
-
-`TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not used
-`/configure`; they are not required for changing an already configured server.
-When `/addteam` is used before `/configure`, the fallback team is retained as
-the first monitored team.
-
-The bot is currently designed for soccer teams because it uses ESPN's soccer scoreboard endpoint. Cup and league fixtures are included when ESPN lists them in the scoreboard feed.
-
-The kickoff is formatted with Discord's short time timestamp, for example:
-
-```text
-Kickoff: <t:1760000000:f>
-```
-
-Discord displays that timestamp in each member's local timezone.
-
-## Setup
+## Local setup
 
 1. Create a Discord application and bot in the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Enable the bot's **Message Content Intent** only if you later add message commands; this bot does not need it.
-3. Invite the bot with the `bot` scope and permission to **View Channel** and **Send Messages**.
-4. Copy `.env.example` to `.env` and fill in the bot token.
-5. Install dependencies and run:
+2. Invite it with the `bot` and `applications.commands` scopes and **View Channels** and **Send Messages** permissions.
+3. Copy `.env.example` to `.env` and set `DISCORD_TOKEN`.
+4. Install and run the bot:
 
 ```powershell
 python -m venv .venv
@@ -81,25 +44,31 @@ pip install -r requirements.txt
 python bot.py
 ```
 
-The bot checks every 10 minutes by default. After adding it to a server, a server administrator runs `/setchannel` and selects the announcement channel. Optionally run `/setrole` to choose the role to mention. Server-specific settings and duplicate-announcement state are stored in `state.json` when no database is configured. The schedule source is ESPN's public soccer scoreboard endpoint.
+Run `/setchannel` after adding the bot to a server. The bot polls every 10 minutes by default and uses ESPN's public soccer scoreboard endpoint. Discord timestamps are displayed in each member's local timezone.
 
-## Remote hosting with Supabase and Railway
+Without `DATABASE_URL`, server settings and announced-match state are stored in `state.json`.
 
-The bot needs a long-running process for Discord's Gateway connection. Deploy the worker to Railway, Render, Fly.io, or another container host. Vercel Functions are request-based and time-limited, so use Vercel only for an optional web dashboard.
+## Environment variables
 
-1. Create a Supabase project and run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor. Rerun it when upgrading an existing deployment so the `guild_teams` table is created and existing selections are migrated.
-2. In Supabase, open **Connect**, choose the **Session pooler**, and copy the PostgreSQL connection string. Use it as `DATABASE_URL`; replace the password placeholder.
-3. Push this repository to GitHub and create a Railway service from the repository. Railway will detect the `Dockerfile`.
-4. Add these Railway variables:
+```env
+DISCORD_TOKEN=your-bot-token
+TEAM_ID=83
+TEAM_NAME=FC Barcelona
+POLL_MINUTES=10
+STATE_FILE=state.json
+DATABASE_URL=postgresql://...
+PORT=8080
+```
 
-   - `DISCORD_TOKEN` — your bot token
-   - `DATABASE_URL` — the Supabase session-pooler URL
-   - `POLL_MINUTES` — usually `10`
+`TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not configured a favourite. Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`.
 
-5. Deploy. The bot will keep server settings and announced fixtures in Supabase instead of local disk.
+## Supabase and Railway
 
-Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`. Supabase recommends choosing the connection method based on whether the application is a persistent backend or serverless function; this bot is a persistent backend.
+The bot requires a long-running process for Discord's Gateway connection. Railway, Render, Fly.io, or another container host can run it.
 
-## Public-bot invite settings
+1. Create a Supabase project.
+2. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL Editor. For an existing deployment, rerun it to create `guild_teams` and migrate current single-team settings.
+3. Copy the Supabase **Session pooler** connection string into `DATABASE_URL`.
+4. Deploy the repository and set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `POLL_MINUTES` in the host's environment settings.
 
-In OAuth2 URL Generator, select the `bot` and `applications.commands` scopes. Give the bot **View Channels** and **Send Messages** permissions. If you want to configure a role mention later, the role must be mentionable or the bot needs the relevant mention permission.
+Supabase stores server settings and announced fixtures when `DATABASE_URL` is configured; local `state.json` is not used for those records.
