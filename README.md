@@ -6,25 +6,37 @@ A public Discord bot that polls a configured soccer team's schedule and posts al
 
 ## Configure the team
 
-Each Discord server can choose its own team from the supported clubs in Europe's
+Each Discord server can choose its own teams from the supported clubs in Europe's
 top five domestic leagues: the Premier League, La Liga, Bundesliga, Serie A,
-and Ligue 1. A server administrator selects the team with:
+and Ligue 1. A server administrator selects the favourite team with:
 
 ```text
 /configure team:Real Madrid
 ```
 
-The selection is stored per server and uses the club's canonical ESPN ID. Names
-are matched case-insensitively, and `/nextmatch` plus scheduled alerts use the
-server's selected team. To check another supported club without changing the
-server configuration, pass its name to `/nextmatch`:
+The favourite is included in alerts. Additional teams can then be managed with:
+
+```text
+/addteam team:Arsenal
+/removeteam team:Arsenal
+/teams
+```
+
+The favourite cannot be removed from alerts until `/configure` is used to select
+a different favourite. Changing it does not remove any other saved teams. The
+selections are stored per server and use the clubs' canonical ESPN IDs. Names
+are matched case-insensitively.
+Scheduled alerts use all of the server's selected teams, while `/nextmatch`
+without an option continues to use the favourite team selected by `/configure`.
+To check another supported club without changing the favourite, pass its name
+to `/nextmatch`:
 
 ```text
 /nextmatch team:Real Madrid
 ```
 
-The `team` option is optional, so `/nextmatch` by itself continues to use the
-configured team.
+The `team` option is optional, so `/nextmatch` by itself shows the favourite
+team's next fixture.
 
 Use `/configure` before `/setchannel` if setting up a new server. For example,
 `/configure team:Real Madrid` stores ESPN ID `86`.
@@ -41,6 +53,8 @@ TEAM_NAME=FC Barcelona
 
 `TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not used
 `/configure`; they are not required for changing an already configured server.
+When `/addteam` is used before `/configure`, the fallback team is retained as
+the first monitored team.
 
 The bot is currently designed for soccer teams because it uses ESPN's soccer scoreboard endpoint. Cup and league fixtures are included when ESPN lists them in the scoreboard feed.
 
@@ -73,7 +87,7 @@ The bot checks every 10 minutes by default. After adding it to a server, a serve
 
 The bot needs a long-running process for Discord's Gateway connection. Deploy the worker to Railway, Render, Fly.io, or another container host. Vercel Functions are request-based and time-limited, so use Vercel only for an optional web dashboard.
 
-1. Create a Supabase project and run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor.
+1. Create a Supabase project and run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor. Rerun it when upgrading an existing deployment so the `guild_teams` table is created and existing selections are migrated.
 2. In Supabase, open **Connect**, choose the **Session pooler**, and copy the PostgreSQL connection string. Use it as `DATABASE_URL`; replace the password placeholder.
 3. Push this repository to GitHub and create a Railway service from the repository. Railway will detect the `Dockerfile`.
 4. Add these Railway variables:
