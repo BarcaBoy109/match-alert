@@ -174,13 +174,18 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
     selected = find_team(team)
     if not isinstance(bot, BarcelonaBot):
         return
+    await interaction.response.defer(ephemeral=True)
     if not selected:
-        await interaction.response.send_message("That team is not in the supported top-five leagues lookup.", ephemeral=True)
+        await interaction.edit_original_response(
+            content="That team is not in the supported top-five leagues lookup."
+        )
         return
     display_name, team_id = selected
     await bot.store.set_guild_value(interaction.guild_id, "team_id", team_id)
     await bot.store.set_guild_value(interaction.guild_id, "team_name", display_name)
-    await interaction.response.send_message(f"This server will now follow **{display_name}** (ESPN ID `{team_id}`).", ephemeral=True)
+    await interaction.edit_original_response(
+        content=f"This server will now follow **{display_name}** (ESPN ID `{team_id}`)."
+    )
 
 
 @app_commands.command(name="nextmatch", description="Show the configured team's next match in the next 7 days.")
@@ -310,7 +315,7 @@ class BarcelonaBot(commands.Bot):
                 role_mention = f"<@&{role_id}> " if role_id else ""
                 await channel.send(
                     f"{role_mention}{team_name} match incoming: **{event_name(match)}**\n"
-                    f"Kickoff: <t:{timestamp}:t>"
+                    f"Kickoff: <t:{timestamp}:f>"
                 )
                 await self.store.mark_announced(str(match["id"]), guild.id)
                 logger.info("Announced %s in %s", event_name(match), guild.name)

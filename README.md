@@ -37,7 +37,7 @@ The bot is currently designed for soccer teams because it uses ESPN's soccer sco
 The kickoff is formatted with Discord's short time timestamp, for example:
 
 ```text
-Kickoff: <t:1760000000:t>
+Kickoff: <t:1760000000:f>
 ```
 
 Discord displays that timestamp in each member's local timezone.
