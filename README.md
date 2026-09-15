@@ -62,6 +62,8 @@ PORT=8080
 
 `TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not configured a favourite. Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`.
 
+`REMINDER_RETENTION_HOURS` controls when sent reminders are deleted after kickoff. It defaults to `3`, allowing time for a normal match to finish.
+
 ## Supabase and Railway
 
 The bot requires a long-running process for Discord's Gateway connection. Railway, Render, Fly.io, or another container host can run it.
@@ -71,4 +73,4 @@ The bot requires a long-running process for Discord's Gateway connection. Railwa
 3. Copy the Supabase **Session pooler** connection string into `DATABASE_URL`.
 4. Deploy the repository and set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `POLL_MINUTES` in the host's environment settings.
 
-Supabase stores server settings and announced fixtures when `DATABASE_URL` is configured; local `state.json` is not used for those records.
+Supabase stores server settings, announced fixtures, and reminder message IDs when `DATABASE_URL` is configured; local `state.json` is not used for those records. The bot needs permission to view and delete messages in the alert channel.

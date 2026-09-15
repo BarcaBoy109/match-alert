@@ -24,5 +24,12 @@ on conflict (guild_id, team_id) do nothing;
 
 create table if not exists public.announced_matches (
   match_id text primary key,
-  announced_at timestamptz not null default now()
+  announced_at timestamptz not null default now(),
+  channel_id bigint,
+  message_id bigint,
+  delete_after timestamptz
 );
+
+alter table public.announced_matches add column if not exists channel_id bigint;
+alter table public.announced_matches add column if not exists message_id bigint;
+alter table public.announced_matches add column if not exists delete_after timestamptz;

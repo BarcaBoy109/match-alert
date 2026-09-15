@@ -22,6 +22,7 @@ DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 TEAM_ID = os.getenv("TEAM_ID", "83")
 TEAM_NAME = os.getenv("TEAM_NAME", "FC Barcelona")
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
+REMINDER_RETENTION_HOURS = float(os.getenv("REMINDER_RETENTION_HOURS", "3"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 PORT = int(os.getenv("PORT", "8080"))
@@ -258,6 +259,84 @@ class StateStore:
         matches = self.local_state.setdefault("announced_matches", [])
         matches.append(match_id)
         self.local_state["announced_matches"] = matches[-50:]
+        save_state(self.local_state)
+
+    async def save_reminder(
+        self,
+        match_id: str,
+        guild_id: int,
+        channel_id: int,
+        message_id: int,
+        delete_after: datetime,
+    ) -> None:
+        """Store the Discord message that should be deleted after a match."""
+        announced_id = f"{guild_id}:{match_id}"
+        if self.pool:
+            await self.pool.execute(
+                """UPDATE announced_matches
+                SET channel_id = $2, message_id = $3, delete_after = $4
+                WHERE match_id = $1""",
+                announced_id,
+                channel_id,
+                message_id,
+                delete_after,
+            )
+            return
+        reminders = self.local_state.setdefault("reminder_messages", [])
+        reminders.append(
+            {
+                "match_id": announced_id,
+                "channel_id": channel_id,
+                "message_id": message_id,
+                "delete_after": delete_after.isoformat(),
+            }
+        )
+        save_state(self.local_state)
+
+    async def get_expired_reminders(self, guild_id: int, now: datetime) -> list[dict]:
+        """Return this guild's reminder messages whose retention period elapsed."""
+        if self.pool:
+            rows = await self.pool.fetch(
+                """SELECT match_id, channel_id, message_id
+                FROM announced_matches
+                WHERE match_id LIKE $1 AND channel_id IS NOT NULL AND message_id IS NOT NULL
+                  AND delete_after IS NOT NULL AND delete_after <= $2""",
+                f"{guild_id}:%",
+                now,
+            )
+            return [dict(row) for row in rows]
+
+        expired = []
+        guild_prefix = f"{guild_id}:"
+        for reminder in self.local_state.get("reminder_messages", []):
+            if not reminder.get("match_id", "").startswith(guild_prefix):
+                continue
+            if not reminder.get("channel_id") or not reminder.get("message_id"):
+                continue
+            try:
+                delete_after = datetime.fromisoformat(reminder["delete_after"])
+            except (KeyError, ValueError):
+                continue
+            if delete_after <= now:
+                expired.append(reminder)
+        return expired
+
+    async def clear_reminder(self, announced_id: str) -> None:
+        """Clear reminder metadata while retaining duplicate-alert history."""
+        if self.pool:
+            await self.pool.execute(
+                """UPDATE announced_matches
+                SET channel_id = NULL, message_id = NULL, delete_after = NULL
+                WHERE match_id = $1""",
+                announced_id,
+            )
+            return
+        reminders = [
+            reminder
+            for reminder in self.local_state.get("reminder_messages", [])
+            if reminder.get("match_id") != announced_id
+        ]
+        self.local_state["reminder_messages"] = reminders
         save_state(self.local_state)
 
 
@@ -549,10 +628,34 @@ class BarcelonaBot(commands.Bot):
             except discord.Forbidden:
                 logger.info("Could not DM the owner of %s", guild.name)
 
+    async def cleanup_reminders(self) -> None:
+        """Delete bot reminders after their matches have finished."""
+        now = datetime.now(timezone.utc)
+        for guild in self.guilds:
+            for reminder in await self.store.get_expired_reminders(guild.id, now):
+                announced_id = reminder["match_id"]
+                channel = guild.get_channel(int(reminder["channel_id"]))
+                if channel is None:
+                    await self.store.clear_reminder(announced_id)
+                    continue
+                try:
+                    message = await channel.fetch_message(int(reminder["message_id"]))
+                    await message.delete()
+                except discord.NotFound:
+                    pass
+                except discord.Forbidden:
+                    logger.warning("Cannot delete reminder %s in %s", reminder["message_id"], guild.name)
+                    continue
+                except discord.HTTPException:
+                    logger.exception("Failed to delete reminder %s in %s", reminder["message_id"], guild.name)
+                    continue
+                await self.store.clear_reminder(announced_id)
+
     @tasks.loop(minutes=POLL_MINUTES)
     async def poll_schedule(self) -> None:
         """Poll each guild's configured teams and send new match alerts."""
         try:
+            await self.cleanup_reminders()
             guild_configs = []
             all_team_ids = set()
             for guild in self.guilds:
@@ -577,11 +680,17 @@ class BarcelonaBot(commands.Bot):
                     if not match or await self.store.has_announced(str(match["id"]), guild.id):
                         continue
                     timestamp = kickoff_unix(match)
-                    await channel.send(
+                    message = await channel.send(
                         f"{role_mention}{team_name} match incoming: **{event_name(match)}**\n"
                         f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                     )
                     await self.store.mark_announced(str(match["id"]), guild.id)
+                    delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
+                        hours=REMINDER_RETENTION_HOURS
+                    )
+                    await self.store.save_reminder(
+                        str(match["id"]), guild.id, channel.id, message.id, delete_after
+                    )
                     logger.info("Announced %s in %s", event_name(match), guild.name)
         except Exception:
             logger.exception("Schedule poll failed")
