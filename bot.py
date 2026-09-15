@@ -188,14 +188,25 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
     )
 
 
-@app_commands.command(name="nextmatch", description="Show the configured team's next match in the next 7 days.")
-async def nextmatch_command(interaction: discord.Interaction) -> None:
-    """Show the configured guild team's next match within seven days."""
+@app_commands.command(name="nextmatch", description="Show a team's next match in the next 7 days.")
+@app_commands.describe(team="Optional club name, for example Real Madrid")
+async def nextmatch_command(interaction: discord.Interaction, team: str | None = None) -> None:
+    """Show the configured or requested team's next match within seven days."""
     await interaction.response.defer(ephemeral=True)
     try:
-        settings = await interaction.client.store.get_guild(interaction.guild_id)
-        team_id = str(settings.get("team_id", TEAM_ID))
-        team_name = settings.get("team_name", TEAM_NAME)
+        if team is not None:
+            selected = find_team(team)
+            if not selected:
+                await interaction.edit_original_response(
+                    content="That team is not in the supported top-five leagues lookup."
+                )
+                return
+            team_name, team_id = selected
+        else:
+            settings = await interaction.client.store.get_guild(interaction.guild_id)
+            team_id = str(settings.get("team_id", TEAM_ID))
+            team_name = settings.get("team_name", TEAM_NAME)
+
         match = await fetch_next_match(team_id, team_name)
         if not match:
             content = f"No {team_name} match was found in the next 7 days."

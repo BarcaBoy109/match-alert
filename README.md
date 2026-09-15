@@ -16,7 +16,15 @@ and Ligue 1. A server administrator selects the team with:
 
 The selection is stored per server and uses the club's canonical ESPN ID. Names
 are matched case-insensitively, and `/nextmatch` plus scheduled alerts use the
-server's selected team.
+server's selected team. To check another supported club without changing the
+server configuration, pass its name to `/nextmatch`:
+
+```text
+/nextmatch team:Real Madrid
+```
+
+The `team` option is optional, so `/nextmatch` by itself continues to use the
+configured team.
 
 Use `/configure` before `/setchannel` if setting up a new server. For example,
 `/configure team:Real Madrid` stores ESPN ID `86`.
