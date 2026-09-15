@@ -321,6 +321,22 @@ class StateStore:
                 expired.append(reminder)
         return expired
 
+    async def get_pending_reminders(self) -> list[dict]:
+        """Return all sent reminders that still have Discord messages."""
+        if self.pool:
+            rows = await self.pool.fetch(
+                """SELECT match_id, channel_id, message_id
+                FROM announced_matches
+                WHERE channel_id IS NOT NULL AND message_id IS NOT NULL
+                  AND delete_after IS NOT NULL"""
+            )
+            return [dict(row) for row in rows]
+        return [
+            reminder
+            for reminder in self.local_state.get("reminder_messages", [])
+            if reminder.get("channel_id") and reminder.get("message_id")
+        ]
+
     async def clear_reminder(self, announced_id: str) -> None:
         """Clear reminder metadata while retaining duplicate-alert history."""
         if self.pool:
@@ -352,6 +368,37 @@ def event_name(event: dict) -> str:
     competitors = competition["competitors"]
     names = {item["homeAway"]: item["team"]["displayName"] for item in competitors}
     return f"{names.get('home', TEAM_NAME)} vs {names.get('away', 'opponent')}"
+
+
+def event_phase(event: dict) -> str:
+    """Return whether an ESPN event is upcoming, live, or final."""
+    status_type = event.get("status", {}).get("type", {})
+    if status_type.get("completed") or status_type.get("state") == "post":
+        return "final"
+    if status_type.get("state") == "in":
+        return "live"
+    return "upcoming"
+
+
+def event_score(event: dict) -> str:
+    """Format the current home and away score from an ESPN event."""
+    competitors = event.get("competitions", [{}])[0].get("competitors", [])
+    scores = {}
+    for item in competitors:
+        score = item.get("score", "?")
+        if isinstance(score, dict):
+            score = score.get("displayValue", score.get("value", "?"))
+        scores[item.get("homeAway")] = str(score)
+    return f"{scores.get('home', '?')}–{scores.get('away', '?')}"
+
+
+def result_message(event: dict) -> str:
+    """Format a live or final match update for a Discord reminder."""
+    phase = event_phase(event)
+    label = "LIVE" if phase == "live" else "FINAL"
+    detail = event.get("status", {}).get("type", {}).get("detail")
+    suffix = f" ({detail})" if detail and phase == "live" else ""
+    return f"**{label}**{suffix}: **{event_name(event)}**\nScore: **{event_score(event)}**"
 
 
 @app_commands.command(
@@ -574,6 +621,29 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
     return next_matches
 
 
+async def fetch_recent_events(match_ids: list[str]) -> dict[str, dict]:
+    """Fetch recently started events so sent reminders can show live results."""
+    match_ids = {str(match_id) for match_id in match_ids}
+    if not match_ids:
+        return {}
+    timeout = aiohttp.ClientTimeout(total=20)
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(hours=REMINDER_RETENTION_HOURS + 24)
+    end = now + timedelta(days=1)
+    date_range = f"{start:%Y%m%d}-{end:%Y%m%d}"
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(
+            SCOREBOARD_URL, params={"limit": 500, "dates": date_range}
+        ) as response:
+            response.raise_for_status()
+            payload = await response.json()
+    return {
+        str(event["id"]): event
+        for event in payload.get("events", [])
+        if str(event.get("id")) in match_ids
+    }
+
+
 async def health(request: web.Request) -> web.Response:
     """Return the lightweight HTTP health-check response."""
     return web.json_response({"ok": True, "service": "match-alert"})
@@ -651,11 +721,41 @@ class BarcelonaBot(commands.Bot):
                     continue
                 await self.store.clear_reminder(announced_id)
 
+    async def update_live_reminders(self) -> None:
+        """Update sent reminders with live scores and final results."""
+        reminders = await self.store.get_pending_reminders()
+        match_ids = [reminder["match_id"].split(":", 1)[1] for reminder in reminders]
+        events = await fetch_recent_events(match_ids)
+        guilds = {guild.id: guild for guild in self.guilds}
+        for reminder in reminders:
+            announced_id = reminder["match_id"]
+            try:
+                guild_id, match_id = announced_id.split(":", 1)
+                event = events.get(match_id)
+                guild = guilds.get(int(guild_id))
+                if event is None or guild is None or event_phase(event) == "upcoming":
+                    continue
+                channel = guild.get_channel(int(reminder["channel_id"]))
+                if channel is None:
+                    continue
+                message = await channel.fetch_message(int(reminder["message_id"]))
+                await message.edit(content=result_message(event))
+            except discord.NotFound:
+                await self.store.clear_reminder(announced_id)
+            except discord.Forbidden:
+                logger.warning("Cannot update reminder %s", reminder["message_id"])
+            except discord.HTTPException:
+                logger.exception("Failed to update reminder %s", reminder["message_id"])
+
     @tasks.loop(minutes=POLL_MINUTES)
     async def poll_schedule(self) -> None:
         """Poll each guild's configured teams and send new match alerts."""
         try:
-            await self.cleanup_reminders()
+            try:
+                await self.cleanup_reminders()
+                await self.update_live_reminders()
+            except Exception:
+                logger.exception("Reminder maintenance failed")
             guild_configs = []
             all_team_ids = set()
             for guild in self.guilds:

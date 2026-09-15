@@ -64,6 +64,8 @@ PORT=8080
 
 `REMINDER_RETENTION_HOURS` controls when sent reminders are deleted after kickoff. It defaults to `3`, allowing time for a normal match to finish.
 
+While a saved alert is active, the bot updates its message with the live score and then the final result before deleting it after the retention period. See [`FUTURE_PLAN.md`](FUTURE_PLAN.md) for planned improvements.
+
 ## Supabase and Railway
 
 The bot requires a long-running process for Discord's Gateway connection. Railway, Render, Fly.io, or another container host can run it.
