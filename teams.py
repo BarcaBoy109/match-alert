@@ -110,11 +110,13 @@ TEAMS = {
 }
 
 ALIASES = {
+    "barca": "barcelona",
     "bournemouth": "afc bournemouth",
     "brighton": "brighton & hove albion",
     "leeds": "leeds united",
     "man city": "manchester city",
     "man united": "manchester united",
+    "man utd": "manchester united",
     "newcastle": "newcastle united",
     "tottenham": "tottenham hotspur",
     "real madrid cf": "real madrid",
@@ -127,6 +129,33 @@ ALIASES = {
     "psg": "paris saint germain",
     "paris saint-germain": "paris saint germain",
     "rennes": "stade rennais",
+    "monaco": "as monaco",
+    "hoffenheim": "tsg hoffenheim",
+    "stuttgart": "vfb stuttgart",
+    "auxerre": "aj auxerre",
+    "lens": "rc lens",
+    "schalke": "schalke 04",
+    "freiburg": "sc freiburg",
+    "hamburg": "hamburg sv",
+    "cologne": "fc cologne",
+    "augsburg": "fc augsburg",
+    "spurs": "tottenham hotspur",
+    "fc barcelona": "barcelona",
+    "man c": "manchester city",
+    "man u": "manchester united",
+    "frankfurt": "eintracht frankfurt",
+    "betis": "real betis",
+    "sociedad": "real sociedad",
+    "villarreal cf": "villarreal",
+    "rmad": "real madrid",
+    "atletico": "atletico madrid",
+    "union berlin": "1 fc union berlin",
+    "celta": "celta vigo",
+    "nottingham": "nottingham forest",
+    "deportivo la coruna": "deportivo",
+    "deportivo coruna": "deportivo",
+    "deportivo alaves": "alaves",
+    "haramball fc": "atletico madrid"
 }
 
 
