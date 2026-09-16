@@ -12,7 +12,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from teams import find_league, find_team
+from teams import find_competition, find_team
 
 load_dotenv()
 
@@ -32,7 +32,7 @@ PORT = int(os.getenv("PORT", "8080"))
 
 # ESPN's public scoreboard endpoint. DEFAULT_TEAM_ID selects the fallback team to monitor.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
-LEAGUE_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
+COMPETITION_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{competition}/scoreboard"
 
 
 def load_state() -> dict:
@@ -562,8 +562,8 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/nextmatch`\n"
         "`/nextmatch team:Arsenal` — Check another supported team's next match.\n"
         "Example: `/nextmatch team:Real Madrid`\n"
-        "`/nextmatch league:Premier League` — Show the next match in a supported league.\n"
-        "Example: `/nextmatch league:La Liga`\n"
+        "`/nextmatch competition:Premier League` — Show the next match in a supported competition.\n"
+        "Example: `/nextmatch competition:La Liga`\n"
         "`/teams` — List the teams monitored by this server.\n\n"
         "**Server managers (Manage Server permission)**\n"
         "`/configure team:<club>` — Set the favourite team.\n"
@@ -576,45 +576,45 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/setchannel channel:#football-alerts`\n"
         "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
         "Example: `/setrole role:@Football Fans`\n\n"
-        "Team names must be from the supported club lookup. League names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, or UEFA Champions League."
+        "Team names must be from the supported club lookup. Competition names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, UEFA Champions League, FA Cup, Copa del Rey, DFB-Pokal, Coppa Italia, or Coupe de France."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
 
 
-@app_commands.command(name="nextmatch", description="Show a team's or league's next match in the next 7 days.")
+@app_commands.command(name="nextmatch", description="Show a team's or competition's next match in the next 7 days.")
 @app_commands.describe(
     team="Optional club name, for example Real Madrid",
-    league="Optional league name, for example Premier League",
+    competition="Optional competition name, for example Premier League",
 )
 async def nextmatch_command(
     interaction: discord.Interaction,
     team: str | None = None,
-    league: str | None = None,
+    competition: str | None = None,
 ) -> None:
-    """Show the next match for a team or in a supported league within seven days."""
+    """Show the next match for a team or in a supported competition within seven days."""
     await interaction.response.defer(ephemeral=True)
     try:
-        if team is not None and league is not None:
+        if team is not None and competition is not None:
             await interaction.edit_original_response(
-                content="Choose either a team or a league, not both."
+                content="Choose either a team or a competition, not both."
             )
             return
 
-        if league is not None:
-            selected_league = find_league(league)
-            if not selected_league:
+        if competition is not None:
+            selected_competition = find_competition(competition)
+            if not selected_competition:
                 await interaction.edit_original_response(
-                    content="That league is not supported. Choose Premier League, La Liga, Bundesliga, Serie A, Ligue 1, or UEFA Champions League."
+                    content="That competition is not supported. Choose a supported top-five league, UEFA Champions League, or one of the five domestic cups."
                 )
                 return
-            league_name, league_code = selected_league
-            match = await fetch_next_league_match(league_code)
+            competition_name, competition_code = selected_competition
+            match = await fetch_next_competition_match(competition_code)
             if not match:
-                content = f"No {league_name} match was found in the next 7 days."
+                content = f"No {competition_name} match was found in the next 7 days."
             else:
                 timestamp = kickoff_unix(match)
                 content = (
-                    f"Next {league_name} match: **{event_name(match)}**\n"
+                    f"Next {competition_name} match: **{event_name(match)}**\n"
                     f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                 )
             await interaction.edit_original_response(content=content)
@@ -655,20 +655,20 @@ async def nextmatch_command(
         )
 
 
-async def fetch_next_league_match(league_code: str) -> dict | None:
-    """Fetch the earliest upcoming fixture for a supported ESPN league."""
-    events = await fetch_upcoming_events(league_code=league_code)
+async def fetch_next_competition_match(competition_code: str) -> dict | None:
+    """Fetch the earliest upcoming fixture for a supported ESPN competition."""
+    events = await fetch_upcoming_events(competition_code=competition_code)
     return min(events, key=lambda event: event["date"], default=None)
 
 
-async def fetch_upcoming_events(league_code: str | None = None) -> list[dict]:
-    """Fetch upcoming ESPN fixtures, optionally scoped to one league."""
+async def fetch_upcoming_events(competition_code: str | None = None) -> list[dict]:
+    """Fetch upcoming ESPN fixtures, optionally scoped to one competition."""
     timeout = aiohttp.ClientTimeout(total=20)
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=7)
     scoreboard_url = (
-        LEAGUE_SCOREBOARD_URL.format(league=league_code)
-        if league_code
+        COMPETITION_SCOREBOARD_URL.format(competition=competition_code)
+        if competition_code
         else SCOREBOARD_URL
     )
     async with aiohttp.ClientSession(timeout=timeout) as session:

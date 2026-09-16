@@ -159,16 +159,21 @@ ALIASES = {
 }
 
 
-LEAGUES = {
+COMPETITIONS = {
     "premier league": ("Premier League", "eng.1"),
     "la liga": ("La Liga", "esp.1"),
     "bundesliga": ("Bundesliga", "ger.1"),
     "serie a": ("Serie A", "ita.1"),
     "ligue 1": ("Ligue 1", "fra.1"),
     "uefa champions league": ("UEFA Champions League", "uefa.champions"),
+    "fa cup": ("FA Cup", "eng.fa"),
+    "copa del rey": ("Copa del Rey", "esp.copa_del_rey"),
+    "dfb pokal": ("DFB-Pokal", "ger.dfb_pokal"),
+    "coppa italia": ("Coppa Italia", "ita.coppa_italia"),
+    "coupe de france": ("Coupe de France", "fra.coupe_de_france"),
 }
 
-LEAGUE_ALIASES = {
+COMPETITION_ALIASES = {
     "epl": "premier league",
     "english premier league": "premier league",
     "english league": "premier league",
@@ -177,6 +182,16 @@ LEAGUE_ALIASES = {
     "german league": "bundesliga",
     "italian league": "serie a",
     "french league": "ligue 1",
+    "fa cup": "fa cup",
+    "english fa cup": "fa cup",
+    "copa del rey": "copa del rey",
+    "spanish cup": "copa del rey",
+    "dfb pokal": "dfb pokal",
+    "german cup": "dfb pokal",
+    "coppa italia": "coppa italia",
+    "italian cup": "coppa italia",
+    "coupe de france": "coupe de france",
+    "french cup": "coupe de france",
     "ucl": "uefa champions league",
     "champions league": "uefa champions league",
     "uefa champions": "uefa champions league",
@@ -190,8 +205,8 @@ def find_team(name: str):
     return TEAMS.get(key)
 
 
-def find_league(name: str):
-    """Return the canonical display name and ESPN code for a supported league."""
+def find_competition(name: str):
+    """Return the canonical display name and ESPN code for a supported competition."""
     key = " ".join(name.casefold().replace("-", " ").split())
-    key = LEAGUE_ALIASES.get(key, key)
-    return LEAGUES.get(key)
+    key = COMPETITION_ALIASES.get(key, key)
+    return COMPETITIONS.get(key)
