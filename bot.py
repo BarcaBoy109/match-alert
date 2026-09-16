@@ -595,29 +595,39 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
     timeout = aiohttp.ClientTimeout(total=20)
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=7)
-    date_range = f"{now:%Y%m%d}-{cutoff:%Y%m%d}"
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(
-            SCOREBOARD_URL, params={"limit": 500, "dates": date_range}
-        ) as response:
-            response.raise_for_status()
-            payload = await response.json()
+        # ESPN's soccer scoreboard endpoint accepts a single date reliably;
+        # date ranges can return HTTP 400 on the generic soccer feed.
+        payloads = []
+        day = now.date()
+        while day <= cutoff.date():
+            date = day.strftime("%Y%m%d")
+            async with session.get(
+                SCOREBOARD_URL, params={"limit": 500, "dates": date}
+            ) as response:
+                if response.status >= 400:
+                    body = await response.text()
+                    logger.error("ESPN scoreboard request failed: %s %s: %s", response.status, date, body[:500])
+                    response.raise_for_status()
+                payloads.append(await response.json())
+            day += timedelta(days=1)
 
-    for event in payload.get("events", []):
-        try:
-            start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
-        except (KeyError, ValueError):
-            continue
-        competitors = event.get("competitions", [{}])[0].get("competitors", [])
-        if not now < start <= cutoff:
-            continue
-        competitor_ids = {
-            str(item.get("team", {}).get("id")) for item in competitors
-        }
-        for team_id in competitor_ids.intersection(next_matches):
-            if team_id not in next_match_starts or start < next_match_starts[team_id]:
-                next_matches[team_id] = event
-                next_match_starts[team_id] = start
+    for payload in payloads:
+        for event in payload.get("events", []):
+          try:
+              start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
+          except (KeyError, ValueError):
+              continue
+          competitors = event.get("competitions", [{}])[0].get("competitors", [])
+          if not now < start <= cutoff:
+              continue
+          competitor_ids = {
+              str(item.get("team", {}).get("id")) for item in competitors
+          }
+          for team_id in competitor_ids.intersection(next_matches):
+              if team_id not in next_match_starts or start < next_match_starts[team_id]:
+                  next_matches[team_id] = event
+                  next_match_starts[team_id] = start
     return next_matches
 
 
