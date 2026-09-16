@@ -16,6 +16,7 @@ Team names are matched case-insensitively. The supported clubs are from the Prem
 | `/teams` | List saved alert teams and identify the favourite. |
 | `/nextmatch` | Show the favourite team's next match within seven days. |
 | `/nextmatch team:<name>` | Check another supported team's next match without changing settings. |
+| `/nextmatch league:<name>` | Show the next match in a supported league within seven days. |
 | `/setchannel channel:<channel>` | Choose where alerts are posted. Requires Manage Server. |
 | `/setrole role:<role>` | Choose the role mentioned in alerts. Requires Manage Server. |
 
@@ -26,9 +27,10 @@ Example:
 /addteam team:Arsenal
 /addteam team:PSG
 /teams
+/nextmatch league:La Liga
 ```
 
-The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club.
+The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club. `/nextmatch` accepts either a team or a league, but not both.
 
 ## Local setup
 

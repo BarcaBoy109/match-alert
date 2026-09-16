@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import aiohttp
-from aiohttp import web
 import asyncpg
 import discord
-from discord.ext import commands, tasks
+from aiohttp import web
 from discord import app_commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
-from teams import find_team
+
+from teams import find_league, find_team
 
 load_dotenv()
 
@@ -31,6 +32,7 @@ PORT = int(os.getenv("PORT", "8080"))
 
 # ESPN's public scoreboard endpoint. DEFAULT_TEAM_ID selects the fallback team to monitor.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
+LEAGUE_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{league}/scoreboard"
 
 
 def load_state() -> dict:
@@ -560,6 +562,8 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/nextmatch`\n"
         "`/nextmatch team:Arsenal` — Check another supported team's next match.\n"
         "Example: `/nextmatch team:Real Madrid`\n"
+        "`/nextmatch league:Premier League` — Show the next match in a supported league.\n"
+        "Example: `/nextmatch league:La Liga`\n"
         "`/teams` — List the teams monitored by this server.\n\n"
         "**Server managers (Manage Server permission)**\n"
         "`/configure team:<club>` — Set the favourite team.\n"
@@ -572,17 +576,50 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/setchannel channel:#football-alerts`\n"
         "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
         "Example: `/setrole role:@Football Fans`\n\n"
-        "Team names must be from the supported top-five leagues lookup."
+        "Team names and league names must be from the supported top-five leagues lookup."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
 
 
-@app_commands.command(name="nextmatch", description="Show a team's next match in the next 7 days.")
-@app_commands.describe(team="Optional club name, for example Real Madrid")
-async def nextmatch_command(interaction: discord.Interaction, team: str | None = None) -> None:
-    """Show the configured or requested team's next match within seven days."""
+@app_commands.command(name="nextmatch", description="Show a team's or league's next match in the next 7 days.")
+@app_commands.describe(
+    team="Optional club name, for example Real Madrid",
+    league="Optional league name, for example Premier League",
+)
+async def nextmatch_command(
+    interaction: discord.Interaction,
+    team: str | None = None,
+    league: str | None = None,
+) -> None:
+    """Show the next match for a team or in a supported league within seven days."""
     await interaction.response.defer(ephemeral=True)
     try:
+        if team is not None and league is not None:
+            await interaction.edit_original_response(
+                content="Choose either a team or a league, not both."
+            )
+            return
+
+        if league is not None:
+            selected_league = find_league(league)
+            if not selected_league:
+                await interaction.edit_original_response(
+                    content="That league is not supported. Choose Premier League, La Liga, Bundesliga, Serie A, or Ligue 1."
+                )
+                return
+            league_name, league_code = selected_league
+            match = await fetch_next_league_match(league_code)
+            if not match:
+                content = f"No {league_name} match was found in the next 7 days."
+            else:
+                timestamp = kickoff_unix(match)
+                content = (
+                    f"Next {league_name} match: **{event_name(match)}**\n"
+                    f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
+                )
+            await interaction.edit_original_response(content=content)
+            return
+
         if team is not None:
             selected = find_team(team)
             if not selected:
@@ -618,26 +655,31 @@ async def nextmatch_command(interaction: discord.Interaction, team: str | None =
         )
 
 
-async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
-    """Fetch each requested team's next upcoming ESPN fixture in one request."""
-    team_ids = [str(team_id) for team_id in team_ids]
-    next_matches = dict.fromkeys(team_ids)
-    next_match_starts = {}
-    if not team_ids:
-        return next_matches
+async def fetch_next_league_match(league_code: str) -> dict | None:
+    """Fetch the earliest upcoming fixture for a supported ESPN league."""
+    events = await fetch_upcoming_events(league_code=league_code)
+    return min(events, key=lambda event: event["date"], default=None)
 
+
+async def fetch_upcoming_events(league_code: str | None = None) -> list[dict]:
+    """Fetch upcoming ESPN fixtures, optionally scoped to one league."""
     timeout = aiohttp.ClientTimeout(total=20)
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=7)
+    scoreboard_url = (
+        LEAGUE_SCOREBOARD_URL.format(league=league_code)
+        if league_code
+        else SCOREBOARD_URL
+    )
     async with aiohttp.ClientSession(timeout=timeout) as session:
         # ESPN's soccer scoreboard endpoint accepts a single date reliably;
-        # date ranges can return HTTP 400 on the generic soccer feed.
+        # date ranges can return HTTP 400 on the soccer feed.
         payloads = []
         day = now.date()
         while day <= cutoff.date():
             date = day.strftime("%Y%m%d")
             async with session.get(
-                SCOREBOARD_URL, params={"limit": 500, "dates": date}
+                scoreboard_url, params={"limit": 500, "dates": date}
             ) as response:
                 if response.status >= 400:
                     body = await response.text()
@@ -646,22 +688,34 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
                 payloads.append(await response.json())
             day += timedelta(days=1)
 
+    upcoming_events = []
     for payload in payloads:
         for event in payload.get("events", []):
-          try:
-              start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
-          except (KeyError, ValueError):
-              continue
-          competitors = event.get("competitions", [{}])[0].get("competitors", [])
-          if not now < start <= cutoff:
-              continue
-          competitor_ids = {
-              str(item.get("team", {}).get("id")) for item in competitors
-          }
-          for team_id in competitor_ids.intersection(next_matches):
-              if team_id not in next_match_starts or start < next_match_starts[team_id]:
-                  next_matches[team_id] = event
-                  next_match_starts[team_id] = start
+            try:
+                start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
+            except (KeyError, ValueError):
+                continue
+            if now < start <= cutoff:
+                upcoming_events.append(event)
+    return upcoming_events
+
+
+async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
+    """Fetch each requested team's next upcoming ESPN fixture in one request."""
+    team_ids = [str(team_id) for team_id in team_ids]
+    next_matches = dict.fromkeys(team_ids)
+    next_match_starts = {}
+    if not team_ids:
+        return next_matches
+
+    for event in await fetch_upcoming_events():
+        start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
+        competitors = event.get("competitions", [{}])[0].get("competitors", [])
+        competitor_ids = {str(item.get("team", {}).get("id")) for item in competitors}
+        for team_id in competitor_ids.intersection(next_matches):
+            if team_id not in next_match_starts or start < next_match_starts[team_id]:
+                next_matches[team_id] = event
+                next_match_starts[team_id] = start
     return next_matches
 
 

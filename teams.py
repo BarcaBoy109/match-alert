@@ -159,8 +159,35 @@ ALIASES = {
 }
 
 
+LEAGUES = {
+    "premier league": ("Premier League", "eng.1"),
+    "la liga": ("La Liga", "esp.1"),
+    "bundesliga": ("Bundesliga", "ger.1"),
+    "serie a": ("Serie A", "ita.1"),
+    "ligue 1": ("Ligue 1", "fra.1"),
+}
+
+LEAGUE_ALIASES = {
+    "epl": "premier league",
+    "english premier league": "premier league",
+    "english league": "premier league",
+    "spanish league": "la liga",
+    "la liga ea sports": "la liga",
+    "german league": "bundesliga",
+    "italian league": "serie a",
+    "french league": "ligue 1",
+}
+
+
 def find_team(name: str):
     """Return the canonical display name and ESPN ID for a team name."""
     key = " ".join(name.casefold().replace("-", " ").split())
     key = ALIASES.get(key, key)
     return TEAMS.get(key)
+
+
+def find_league(name: str):
+    """Return the canonical display name and ESPN code for a supported league."""
+    key = " ".join(name.casefold().replace("-", " ").split())
+    key = LEAGUE_ALIASES.get(key, key)
+    return LEAGUES.get(key)
