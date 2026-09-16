@@ -16,18 +16,20 @@ from teams import find_team
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger("barca-bot")
+logger = logging.getLogger("match-alert-bot")
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-TEAM_ID = os.getenv("TEAM_ID", "83")
-TEAM_NAME = os.getenv("TEAM_NAME", "FC Barcelona")
+# These are fallbacks for servers that have not configured a favourite team.
+# Keep the legacy environment names as a compatibility fallback for existing deployments.
+DEFAULT_TEAM_ID = os.getenv("DEFAULT_TEAM_ID", os.getenv("TEAM_ID", "83"))
+DEFAULT_TEAM_NAME = os.getenv("DEFAULT_TEAM_NAME", os.getenv("TEAM_NAME", "FC Barcelona"))
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
 REMINDER_RETENTION_HOURS = float(os.getenv("REMINDER_RETENTION_HOURS", "3"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
 PORT = int(os.getenv("PORT", "8080"))
 
-# ESPN's public scoreboard endpoint. TEAM_ID selects the team to monitor.
+# ESPN's public scoreboard endpoint. DEFAULT_TEAM_ID selects the fallback team to monitor.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 
 
@@ -98,7 +100,7 @@ class StateStore:
             )
             if legacy and legacy["team_name"] and legacy["team_id"]:
                 return [(legacy["team_name"], str(legacy["team_id"]))]
-            return [(TEAM_NAME, TEAM_ID)]
+            return [(DEFAULT_TEAM_NAME, DEFAULT_TEAM_ID)]
 
         guild_state = self.local_state.get("guilds", {}).get(str(guild_id), {})
         if "teams" in guild_state and guild_state["teams"]:
@@ -108,7 +110,7 @@ class StateStore:
             ]
         if guild_state.get("team_name") and guild_state.get("team_id"):
             return [(guild_state["team_name"], str(guild_state["team_id"]))]
-        return [(TEAM_NAME, TEAM_ID)]
+        return [(DEFAULT_TEAM_NAME, DEFAULT_TEAM_ID)]
 
     async def set_guild_favourite(self, guild_id: int, team_name: str, team_id: str) -> None:
         """Set the favourite team and ensure it is included in match alerts."""
@@ -185,12 +187,12 @@ class StateStore:
                         initial_name = (
                             legacy["team_name"]
                             if legacy and legacy["team_name"] and legacy["team_id"]
-                            else TEAM_NAME
+                            else DEFAULT_TEAM_NAME
                         )
                         initial_id = (
                             str(legacy["team_id"])
                             if legacy and legacy["team_name"] and legacy["team_id"]
-                            else TEAM_ID
+                            else DEFAULT_TEAM_ID
                         )
                         await connection.execute(
                             """INSERT INTO guild_teams (guild_id, team_id, team_name)
@@ -210,8 +212,8 @@ class StateStore:
 
         guild_state = self.local_state.setdefault("guilds", {}).setdefault(str(guild_id), {})
         if "teams" not in guild_state or not guild_state["teams"]:
-            initial_name = guild_state.get("team_name", TEAM_NAME)
-            initial_id = str(guild_state.get("team_id", TEAM_ID))
+            initial_name = guild_state.get("team_name", DEFAULT_TEAM_NAME)
+            initial_id = str(guild_state.get("team_id", DEFAULT_TEAM_ID))
             guild_state["teams"] = [{"team_id": initial_id, "team_name": initial_name}]
         if any(str(team["team_id"]) == team_id for team in guild_state["teams"]):
             return False
@@ -367,7 +369,7 @@ def event_name(event: dict) -> str:
     competition = event["competitions"][0]
     competitors = competition["competitors"]
     names = {item["homeAway"]: item["team"]["displayName"] for item in competitors}
-    return f"{names.get('home', TEAM_NAME)} vs {names.get('away', 'opponent')}"
+    return f"{names.get('home', DEFAULT_TEAM_NAME)} vs {names.get('away', 'opponent')}"
 
 
 def event_phase(event: dict) -> str:
@@ -410,7 +412,7 @@ def result_message(event: dict) -> str:
 async def setchannel_command(interaction: discord.Interaction, channel: discord.TextChannel) -> None:
     """Configure the guild channel used for match alerts."""
     bot = interaction.client
-    if not isinstance(bot, BarcelonaBot):
+    if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
     await bot.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
@@ -440,7 +442,7 @@ async def setchannel_command_error(
 async def setrole_command(interaction: discord.Interaction, role: discord.Role) -> None:
     """Configure the guild role mentioned in match alerts."""
     bot = interaction.client
-    if not isinstance(bot, BarcelonaBot):
+    if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
     await bot.store.set_guild_value(interaction.guild_id, "role_id", role.id)
@@ -455,7 +457,7 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
     """Configure the guild's monitored team using the ESPN lookup table."""
     bot = interaction.client
     selected = find_team(team)
-    if not isinstance(bot, BarcelonaBot):
+    if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
     if not selected:
@@ -477,7 +479,7 @@ async def addteam_command(interaction: discord.Interaction, team: str) -> None:
     """Add one team to the guild's monitored teams."""
     bot = interaction.client
     selected = find_team(team)
-    if not isinstance(bot, BarcelonaBot):
+    if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
     if not selected:
@@ -501,7 +503,7 @@ async def removeteam_command(interaction: discord.Interaction, team: str) -> Non
     """Remove one team from the guild's monitored teams."""
     bot = interaction.client
     selected = find_team(team)
-    if not isinstance(bot, BarcelonaBot):
+    if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
     if not selected:
@@ -517,7 +519,7 @@ async def removeteam_command(interaction: discord.Interaction, team: str) -> Non
         )
         return
     settings = await bot.store.get_guild(interaction.guild_id)
-    favourite_id = str(settings.get("team_id", TEAM_ID))
+    favourite_id = str(settings.get("team_id", DEFAULT_TEAM_ID))
     if team_id == favourite_id:
         await interaction.edit_original_response(
             content="The favourite team cannot be removed. Use `/configure` to choose a new favourite first."
@@ -540,7 +542,7 @@ async def teams_command(interaction: discord.Interaction) -> None:
     await interaction.response.defer(ephemeral=True)
     teams = await interaction.client.store.get_guild_teams(interaction.guild_id)
     settings = await interaction.client.store.get_guild(interaction.guild_id)
-    favourite_id = str(settings.get("team_id", TEAM_ID))
+    favourite_id = str(settings.get("team_id", DEFAULT_TEAM_ID))
     content = "Teams monitored by this server:\n" + "\n".join(
         f"- **{team_name}**{' (favourite)' if team_id == favourite_id else ''}"
         for team_name, team_id in teams
@@ -591,8 +593,8 @@ async def nextmatch_command(interaction: discord.Interaction, team: str | None =
             team_name, team_id = selected
         else:
             settings = await interaction.client.store.get_guild(interaction.guild_id)
-            team_id = str(settings.get("team_id", TEAM_ID))
-            team_name = settings.get("team_name", TEAM_NAME)
+            team_id = str(settings.get("team_id", DEFAULT_TEAM_ID))
+            team_name = settings.get("team_name", DEFAULT_TEAM_NAME)
 
         match = (await fetch_next_matches([team_id]))[team_id]
         if not match:
@@ -691,7 +693,7 @@ async def health(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "service": "match-alert"})
 
 
-class BarcelonaBot(commands.Bot):
+class MatchAlertBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
         super().__init__(command_prefix="!", intents=intents)
@@ -843,4 +845,4 @@ class BarcelonaBot(commands.Bot):
         await self.wait_until_ready()
 
 
-BarcelonaBot().run(DISCORD_TOKEN)
+MatchAlertBot().run(DISCORD_TOKEN)

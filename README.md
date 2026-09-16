@@ -52,15 +52,15 @@ Without `DATABASE_URL`, server settings and announced-match state are stored in 
 
 ```env
 DISCORD_TOKEN=your-bot-token
-TEAM_ID=83
-TEAM_NAME=FC Barcelona
+DEFAULT_TEAM_ID=83
+DEFAULT_TEAM_NAME=FC Barcelona
 POLL_MINUTES=10
 STATE_FILE=state.json
 DATABASE_URL=postgresql://...
 PORT=8080
 ```
 
-`TEAM_ID` and `TEAM_NAME` are fallback values for servers that have not configured a favourite. Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`.
+`DEFAULT_TEAM_ID` and `DEFAULT_TEAM_NAME` are fallback values for servers that have not configured a favourite. Existing deployments using `TEAM_ID` and `TEAM_NAME` remain supported. Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`.
 
 `REMINDER_RETENTION_HOURS` controls when sent reminders are deleted after kickoff. It defaults to `3`, allowing time for a normal match to finish.
 
