@@ -548,6 +548,33 @@ async def teams_command(interaction: discord.Interaction) -> None:
     await interaction.edit_original_response(content=content)
 
 
+@app_commands.command(name="help", description="Show the bot commands and examples.")
+async def help_command(interaction: discord.Interaction) -> None:
+    """Explain the available commands and how to use them."""
+    content = (
+        "**Match Alert — Commands**\n\n"
+        "**Everyone**\n"
+        "`/nextmatch` — Show the favourite team's next match within 7 days.\n"
+        "Example: `/nextmatch`\n"
+        "`/nextmatch team:Arsenal` — Check another supported team's next match.\n"
+        "Example: `/nextmatch team:Real Madrid`\n"
+        "`/teams` — List the teams monitored by this server.\n\n"
+        "**Server managers (Manage Server permission)**\n"
+        "`/configure team:<club>` — Set the favourite team.\n"
+        "Example: `/configure team:FC Barcelona`\n"
+        "`/addteam team:<club>` — Add a team to match alerts.\n"
+        "Example: `/addteam team:Arsenal`\n"
+        "`/removeteam team:<club>` — Stop monitoring a team.\n"
+        "Example: `/removeteam team:Arsenal`\n"
+        "`/setchannel channel:<channel>` — Choose where alerts are posted.\n"
+        "Example: `/setchannel channel:#football-alerts`\n"
+        "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
+        "Example: `/setrole role:@Football Fans`\n\n"
+        "Team names must be from the supported top-five leagues lookup."
+    )
+    await interaction.response.send_message(content=content, ephemeral=True)
+
+
 @app_commands.command(name="nextmatch", description="Show a team's next match in the next 7 days.")
 @app_commands.describe(team="Optional club name, for example Real Madrid")
 async def nextmatch_command(interaction: discord.Interaction, team: str | None = None) -> None:
@@ -674,6 +701,7 @@ class BarcelonaBot(commands.Bot):
         self.tree.add_command(addteam_command)
         self.tree.add_command(removeteam_command)
         self.tree.add_command(teams_command)
+        self.tree.add_command(help_command)
         self.tree.add_command(nextmatch_command)
         self.tree.add_command(configure_command)
         self._commands_synced = False
