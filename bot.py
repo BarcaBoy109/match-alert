@@ -577,6 +577,11 @@ async def nextmatch_command(interaction: discord.Interaction, team: str | None =
                 f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
             )
         await interaction.edit_original_response(content=content)
+    except aiohttp.ClientError:
+        logger.exception("/nextmatch ESPN data provider request failed")
+        await interaction.edit_original_response(
+            content="The match data service is temporarily unavailable. Please try again shortly."
+        )
     except Exception:
         logger.exception("/nextmatch failed")
         await interaction.edit_original_response(
