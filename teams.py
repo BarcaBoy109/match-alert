@@ -165,6 +165,7 @@ LEAGUES = {
     "bundesliga": ("Bundesliga", "ger.1"),
     "serie a": ("Serie A", "ita.1"),
     "ligue 1": ("Ligue 1", "fra.1"),
+    "uefa champions league": ("UEFA Champions League", "uefa.champions"),
 }
 
 LEAGUE_ALIASES = {
@@ -176,6 +177,9 @@ LEAGUE_ALIASES = {
     "german league": "bundesliga",
     "italian league": "serie a",
     "french league": "ligue 1",
+    "ucl": "uefa champions league",
+    "champions league": "uefa champions league",
+    "uefa champions": "uefa champions league",
 }
 
 

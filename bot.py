@@ -464,7 +464,7 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported top-five leagues lookup."
+            content="That team is not in the supported club lookup."
         )
         return
     display_name, team_id = selected
@@ -486,7 +486,7 @@ async def addteam_command(interaction: discord.Interaction, team: str) -> None:
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported top-five leagues lookup."
+            content="That team is not in the supported club lookup."
         )
         return
     display_name, team_id = selected
@@ -510,7 +510,7 @@ async def removeteam_command(interaction: discord.Interaction, team: str) -> Non
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported top-five leagues lookup."
+            content="That team is not in the supported club lookup."
         )
         return
     display_name, team_id = selected
@@ -576,7 +576,7 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/setchannel channel:#football-alerts`\n"
         "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
         "Example: `/setrole role:@Football Fans`\n\n"
-        "Team names and league names must be from the supported top-five leagues lookup."
+        "Team names must be from the supported club lookup. League names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, or UEFA Champions League."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
 
@@ -604,7 +604,7 @@ async def nextmatch_command(
             selected_league = find_league(league)
             if not selected_league:
                 await interaction.edit_original_response(
-                    content="That league is not supported. Choose Premier League, La Liga, Bundesliga, Serie A, or Ligue 1."
+                    content="That league is not supported. Choose Premier League, La Liga, Bundesliga, Serie A, Ligue 1, or UEFA Champions League."
                 )
                 return
             league_name, league_code = selected_league
@@ -624,7 +624,7 @@ async def nextmatch_command(
             selected = find_team(team)
             if not selected:
                 await interaction.edit_original_response(
-                    content="That team is not in the supported top-five leagues lookup."
+                    content="That team is not in the supported club lookup."
                 )
                 return
             team_name, team_id = selected
