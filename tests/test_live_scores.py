@@ -75,15 +75,24 @@ class NationalTeamTests(unittest.TestCase):
         }
         self.assertTrue(bot.event_has_team(event, "international:south-korea"))
 
-    def test_unlisted_league_team_uses_its_fixture_name(self):
-        team_name, team_id = find_team("FC Porto")
-        self.assertEqual((team_name, team_id), ("FC Porto", "name:fc porto"))
-        event = {"competitions": [{"competitors": [{"team": {"displayName": "FC Porto"}}]}]}
+    def test_current_second_division_club_is_strictly_catalogued(self):
+        team_name, team_id = find_team("Middlesbrough")
+        self.assertEqual((team_name, team_id), ("Middlesbrough", "369"))
+        event = {"competitions": [{"competitors": [{"team": {"id": "369"}}]}]}
         self.assertTrue(bot.event_has_team(event, team_id))
+        self.assertIsNone(find_team("Not A Real Club"))
+
+    def test_new_leagues_use_numeric_espn_team_ids(self):
+        self.assertEqual(find_team("FC Porto"), ("FC Porto", "437"))
+        self.assertEqual(find_team("LA Galaxy"), ("LA Galaxy", "187"))
+        self.assertEqual(find_team("Al Hilal"), ("Al Hilal", "929"))
+
 
 
 class CompetitionTests(unittest.TestCase):
     def test_requested_league_aliases_resolve_to_espn_competitions(self):
         self.assertEqual(find_competition("Championship"), ("EFL Championship", "eng.2"))
         self.assertEqual(find_competition("MLS"), ("Major League Soccer", "usa.1"))
-        self.assertEqual(find_competition("Saudi League"), ("Saudi Pro League", "sau.1"))
+        self.assertEqual(find_competition("Saudi League"), ("Saudi Pro League", "ksa.1"))
+        self.assertEqual(find_competition("UEL"), ("UEFA Europa League", "uefa.europa"))
+        self.assertEqual(find_competition("UECL"), ("UEFA Conference League", "uefa.europa.conf"))

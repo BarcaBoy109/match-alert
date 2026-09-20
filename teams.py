@@ -162,6 +162,95 @@ TEAMS = {
     "peru": ("Peru", "international:peru"),
 }
 
+
+ESPN_LEAGUE_TEAMS = (
+    # EFL Championship (eng.2)
+    ("Swansea City", "318"), ("West Ham United", "371"), ("Middlesbrough", "369"),
+    ("Wolverhampton Wanderers", "380"), ("West Bromwich Albion", "383"),
+    ("Queens Park Rangers", "334"), ("Stoke City", "336"), ("Bristol City", "333"),
+    ("Charlton Athletic", "372"), ("Birmingham City", "392"), ("Millwall", "391"),
+    ("Lincoln City", "314"), ("Southampton", "376"), ("Wrexham", "352"),
+    ("Norwich City", "381"), ("Blackburn Rovers", "365"), ("Sheffield United", "398"),
+    ("Portsmouth", "385"), ("Watford", "395"), ("Cardiff City", "347"),
+    ("Bolton Wanderers", "358"), ("Derby County", "374"), ("Preston North End", "394"),
+    ("Burnley", "379"),
+    # LALIGA 2 (esp.2)
+    ("Castellón", "4438"), ("Eibar", "3752"), ("Mallorca", "84"), ("Girona", "9812"),
+    ("Las Palmas", "98"), ("Sporting Gijón", "3788"), ("Tenerife", "245"),
+    ("Almería", "6832"), ("Real Oviedo", "92"), ("Burgos", "12597"),
+    ("Real Sociedad II", "20983"), ("Granada", "3747"), ("CD Sabadell", "11487"),
+    ("Leganés", "17534"), ("RC Celta Fortuna", "131858"), ("Córdoba", "8447"),
+    ("Eldense", "7320"), ("Real Valladolid", "95"), ("Cádiz", "3842"),
+    ("FC Andorra", "20179"), ("Albacete", "2737"), ("Ceuta", "5404"),
+    # 2. Bundesliga (ger.2)
+    ("Hertha Berlin", "129"), ("1. FC Nürnberg", "269"), ("1. FC Heidenheim 1846", "6418"),
+    ("VfL Wolfsburg", "138"), ("Kaiserslautern", "130"), ("1. FC Magdeburg", "10382"),
+    ("Energie Cottbus", "123"), ("St. Pauli", "270"), ("VfL Bochum", "121"),
+    ("Hannover 96", "2428"), ("VfL Osnabruck", "7013"), ("SpVgg Greuther Fürth", "3070"),
+    ("Karlsruher SC", "4471"), ("TSV Eintracht Braunschweig", "3067"),
+    ("Arminia Bielefeld", "2506"), ("Holstein Kiel", "7884"), ("Dynamo Dresden", "7017"),
+    ("SV Darmstadt 98", "3812"),
+    # Serie B (ita.2)
+    ("Palermo", "2923"), ("Mantova", "3991"), ("Ascoli", "3346"), ("Sudtirol", "11139"),
+    ("Modena", "2573"), ("Cesena", "3337"), ("US Avellino", "4055"),
+    ("Benevento", "4059"), ("Padova", "3952"), ("Pisa", "3956"), ("Empoli", "2574"),
+    ("Arezzo", "3345"), ("Vicenza", "120"), ("Virtus Entella", "11137"),
+    ("Cremonese", "4050"), ("Hellas Verona", "119"), ("Sampdoria", "2734"),
+    ("Juve Stabia", "3975"), ("Catanzaro", "3257"), ("Carrarese", "3988"),
+    # Ligue 2 (fra.2)
+    ("Nantes", "165"), ("Guingamp", "171"), ("Metz", "177"), ("Saint-Étienne", "178"),
+    ("Sochaux", "272"), ("Montpellier", "274"), ("Dijon FCO", "3170"),
+    ("Clermont Foot", "3171"), ("Stade de Reims", "3243"), ("Stade Laval", "3266"),
+    ("AS Nancy Lorraine", "3267"), ("Grenoble", "6994"), ("Rodez Aveyron", "7719"),
+    ("Dunkerque", "7732"), ("Boulogne", "7869"), ("Pau", "10678"),
+    ("Red Star FC 93", "11884"), ("Annecy", "18066"),
+    # Primeira Liga (por.1)
+    ("FC Porto", "437"), ("Benfica", "1929"), ("Sporting CP", "2250"),
+    ("Santa Clara", "12215"), ("Arouca", "15784"), ("Estrela", "21610"),
+    ("Braga", "2994"), ("Académico de Viseu", "21607"), ("Maritimo", "552"),
+    ("Gil Vicente", "3699"), ("Alverca", "21613"), ("FC Famalicao", "12698"),
+    ("Moreirense", "3696"), ("Vitória de Guimaraes", "5309"), ("C.D. Nacional", "3472"),
+    ("Rio Ave", "3822"), ("Estoril", "12216"), ("Casa Pia", "21581"),
+    # Eredivisie (ned.1)
+    ("Feyenoord Rotterdam", "142"), ("PSV Eindhoven", "148"), ("AZ Alkmaar", "140"),
+    ("Ajax Amsterdam", "139"), ("FC Twente", "152"), ("Fortuna Sittard", "143"),
+    ("Excelsior", "2566"), ("FC Groningen", "145"), ("Go Ahead Eagles", "3706"),
+    ("Heerenveen", "146"), ("NEC Nijmegen", "147"), ("Telstar", "3735"),
+    ("Sparta Rotterdam", "151"), ("SC Cambuur", "3736"), ("FC Utrecht", "153"),
+    ("PEC Zwolle", "2565"), ("ADO Den Haag", "2726"), ("Willem II", "156"),
+    # Süper Lig (tur.1)
+    ("Galatasaray", "432"), ("Besiktas", "1895"), ("Kocaelispor", "995"),
+    ("Alanyaspor", "9078"), ("Trabzonspor", "997"), ("Amed SFK", "132335"),
+    ("Kasimpasa", "6870"), ("Caykur Rizespor", "7656"), ("Gaziantep FK", "20070"),
+    ("Fenerbahce", "436"), ("Çorum FK", "132334"), ("Istanbul Basaksehir", "7914"),
+    ("Genclerbirligi", "996"), ("Konyaspor", "7648"), ("Samsunspor", "11429"),
+    ("Erzurum BB", "19267"), ("Eyupspor", "20729"), ("Goztepe", "789"),
+    # Major League Soccer (usa.1)
+    ("Chicago Fire FC", "182"), ("Columbus Crew", "183"), ("Colorado Rapids", "184"),
+    ("FC Dallas", "185"), ("Sporting Kansas City", "186"), ("LA Galaxy", "187"),
+    ("New England Revolution", "189"), ("Red Bull New York", "190"),
+    ("San Jose Earthquakes", "191"), ("D.C. United", "193"), ("Real Salt Lake", "4771"),
+    ("Houston Dynamo FC", "6077"), ("Toronto FC", "7318"), ("CF Montréal", "9720"),
+    ("Portland Timbers", "9723"), ("Seattle Sounders FC", "9726"),
+    ("Vancouver Whitecaps", "9727"), ("Philadelphia Union", "10739"),
+    ("Orlando City SC", "12011"), ("Minnesota United FC", "17362"),
+    ("New York City FC", "17606"), ("FC Cincinnati", "18267"),
+    ("Atlanta United FC", "18418"), ("LAFC", "18966"), ("Nashville SC", "18986"),
+    ("Inter Miami CF", "20232"), ("Austin FC", "20906"), ("Charlotte FC", "21300"),
+    ("St. Louis CITY SC", "21812"), ("San Diego FC", "22529"),
+    # Saudi Pro League (ksa.1)
+    ("Al Shabab", "793"), ("Al Nassr", "817"), ("Al Hilal", "929"),
+    ("Al Ittihad", "2276"), ("Al Ahli", "8346"), ("Al Ettifaq", "8363"),
+    ("Al Fateh", "13033"), ("Al Taawoun", "18459"), ("Al Faisaly", "21446"),
+    ("Al Fayha", "21827"), ("Al Khaleej", "21829"), ("Abha", "21833"),
+    ("Al Hazem", "21964"), ("Al Riyadh", "21965"), ("Al Qadsiah", "22022"),
+    ("Al Kholood", "22028"), ("Neom SC", "130899"), ("Al Diriyah", "131746"),
+)
+
+for _team_name, _team_id in ESPN_LEAGUE_TEAMS:
+    _team_key = " ".join(_team_name.casefold().replace("-", " ").split())
+    TEAMS[_team_key] = (_team_name, _team_id)
+
 ALIASES = {
     "barca": "barcelona",
     "bournemouth": "afc bournemouth",
@@ -240,6 +329,8 @@ COMPETITIONS = {
     "serie a": ("Serie A", "ita.1"),
     "ligue 1": ("Ligue 1", "fra.1"),
     "uefa champions league": ("UEFA Champions League", "uefa.champions"),
+    "uefa europa league": ("UEFA Europa League", "uefa.europa"),
+    "uefa conference league": ("UEFA Conference League", "uefa.europa.conf"),
     "fa cup": ("FA Cup", "eng.fa"),
     "copa del rey": ("Copa del Rey", "esp.copa_del_rey"),
     "dfb pokal": ("DFB-Pokal", "ger.dfb_pokal"),
@@ -254,7 +345,7 @@ COMPETITIONS = {
     "eredivisie": ("Eredivisie", "ned.1"),
     "super lig": ("Süper Lig", "tur.1"),
     "major league soccer": ("Major League Soccer", "usa.1"),
-    "saudi pro league": ("Saudi Pro League", "sau.1"),
+    "saudi pro league": ("Saudi Pro League", "ksa.1"),
 }
 
 COMPETITION_ALIASES = {
@@ -297,25 +388,16 @@ COMPETITION_ALIASES = {
     "ucl": "uefa champions league",
     "champions league": "uefa champions league",
     "uefa champions": "uefa champions league",
+    "uel": "uefa europa league",
+    "uecl": "uefa conference league",
 }
 
 
-def normalize_team_name(name: str) -> str:
-    """Normalize a team name for aliases and fixture-name matching."""
-    return " ".join(name.casefold().replace("-", " ").split())
-
-
 def find_team(name: str):
-    """Return a canonical team entry, preserving unknown fixture team names.
-
-    Known teams use ESPN IDs. Other teams use a stable name-based ID, which is
-    matched against ESPN's event display name by the bot.
-    """
-    key = normalize_team_name(name)
+    """Return the canonical display name and ESPN ID for a team name."""
+    key = " ".join(name.casefold().replace("-", " ").split())
     key = ALIASES.get(key, key)
-    if not key:
-        return None
-    return TEAMS.get(key, (name.strip(), f"name:{key}"))
+    return TEAMS.get(key)
 
 
 def find_competition(name: str):

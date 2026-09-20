@@ -7,6 +7,8 @@
 - Prevent duplicate teams and duplicate match alerts.
 - Update sent reminders with live scores and final results.
 - Delete reminders after the configured retention period.
+- Maintain the verified ESPN-ID catalog for supported clubs and national teams.
+- Support fixture lookups across the five second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, and Saudi Pro League.
 
 ## Planned improvements
 

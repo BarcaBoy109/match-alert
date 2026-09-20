@@ -12,7 +12,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from teams import find_competition, find_team, normalize_team_name
+from teams import find_competition, find_team
 
 load_dotenv()
 
@@ -377,13 +377,10 @@ def event_name(event: dict) -> str:
 def event_has_team(event: dict, team_id: str) -> bool:
     """Return whether an event contains a saved club or national team."""
     competitors = event.get("competitions", [{}])[0].get("competitors", [])
-    if not team_id.startswith(("international:", "name:")):
+    if not team_id.startswith("international:"):
         return any(str(item.get("team", {}).get("id")) == team_id for item in competitors)
     for competitor in competitors:
         team_name = competitor.get("team", {}).get("displayName")
-        if team_id.startswith("name:") and team_name:
-            if normalize_team_name(team_name) == team_id.removeprefix("name:"):
-                return True
         selected = find_team(team_name) if team_name else None
         if selected and selected[1] == team_id:
             return True
