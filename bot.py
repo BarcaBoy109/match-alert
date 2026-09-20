@@ -374,6 +374,19 @@ def event_name(event: dict) -> str:
     return f"{names.get('home', DEFAULT_TEAM_NAME)} vs {names.get('away', 'opponent')}"
 
 
+def event_has_team(event: dict, team_id: str) -> bool:
+    """Return whether an event contains a saved club or national team."""
+    competitors = event.get("competitions", [{}])[0].get("competitors", [])
+    if not team_id.startswith("international:"):
+        return any(str(item.get("team", {}).get("id")) == team_id for item in competitors)
+    for competitor in competitors:
+        team_name = competitor.get("team", {}).get("displayName")
+        selected = find_team(team_name) if team_name else None
+        if selected and selected[1] == team_id:
+            return True
+    return False
+
+
 def event_phase(event: dict) -> str:
     """Return whether an ESPN event is upcoming, live, or final."""
     status_type = event.get("status", {}).get("type", {})
@@ -453,7 +466,7 @@ async def setrole_command(interaction: discord.Interaction, role: discord.Role) 
     )
 
 @app_commands.command(name="configure", description="Choose this server's favourite team.")
-@app_commands.describe(team="Club name, for example Real Madrid")
+@app_commands.describe(team="Team name, for example Real Madrid or Japan")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def configure_command(interaction: discord.Interaction, team: str) -> None:
     """Configure the guild's monitored team using the ESPN lookup table."""
@@ -464,7 +477,7 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported club lookup."
+            content="That team is not in the supported team lookup."
         )
         return
     display_name, team_id = selected
@@ -475,7 +488,7 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
 
 
 @app_commands.command(name="addteam", description="Add a team to this server's match alerts.")
-@app_commands.describe(team="Club name, for example Arsenal")
+@app_commands.describe(team="Team name, for example Arsenal or Japan")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def addteam_command(interaction: discord.Interaction, team: str) -> None:
     """Add one team to the guild's monitored teams."""
@@ -486,7 +499,7 @@ async def addteam_command(interaction: discord.Interaction, team: str) -> None:
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported club lookup."
+            content="That team is not in the supported team lookup."
         )
         return
     display_name, team_id = selected
@@ -499,7 +512,7 @@ async def addteam_command(interaction: discord.Interaction, team: str) -> None:
 
 
 @app_commands.command(name="removeteam", description="Remove a team from this server's match alerts.")
-@app_commands.describe(team="Club name, for example Arsenal")
+@app_commands.describe(team="Team name, for example Arsenal or Japan")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def removeteam_command(interaction: discord.Interaction, team: str) -> None:
     """Remove one team from the guild's monitored teams."""
@@ -510,7 +523,7 @@ async def removeteam_command(interaction: discord.Interaction, team: str) -> Non
     await interaction.response.defer(ephemeral=True)
     if not selected:
         await interaction.edit_original_response(
-            content="That team is not in the supported club lookup."
+            content="That team is not in the supported team lookup."
         )
         return
     display_name, team_id = selected
@@ -576,14 +589,14 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/setchannel channel:#football-alerts`\n"
         "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
         "Example: `/setrole role:@Football Fans`\n\n"
-        "Team names must be from the supported club lookup. Competition names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, UEFA Champions League, FA Cup, Copa del Rey, DFB-Pokal, Coppa Italia, or Coupe de France."
+        "Team names must be from the supported team lookup, including the top 50 men's national teams. Competition names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, UEFA Champions League, FA Cup, Copa del Rey, DFB-Pokal, Coppa Italia, or Coupe de France."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
 
 
 @app_commands.command(name="nextmatch", description="Show a team's or competition's next match in the next 7 days.")
 @app_commands.describe(
-    team="Optional club name, for example Real Madrid",
+    team="Optional team name, for example Real Madrid or Japan",
     competition="Optional competition name, for example Premier League",
 )
 async def nextmatch_command(
@@ -624,7 +637,7 @@ async def nextmatch_command(
             selected = find_team(team)
             if not selected:
                 await interaction.edit_original_response(
-                    content="That team is not in the supported club lookup."
+                    content="That team is not in the supported team lookup."
                 )
                 return
             team_name, team_id = selected
@@ -710,10 +723,10 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
 
     for event in await fetch_upcoming_events():
         start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
-        competitors = event.get("competitions", [{}])[0].get("competitors", [])
-        competitor_ids = {str(item.get("team", {}).get("id")) for item in competitors}
-        for team_id in competitor_ids.intersection(next_matches):
-            if team_id not in next_match_starts or start < next_match_starts[team_id]:
+        for team_id in next_matches:
+            if event_has_team(event, team_id) and (
+                team_id not in next_match_starts or start < next_match_starts[team_id]
+            ):
                 next_matches[team_id] = event
                 next_match_starts[team_id] = start
     return next_matches
