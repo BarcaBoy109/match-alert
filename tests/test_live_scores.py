@@ -1,7 +1,7 @@
 import unittest
 
 import bot
-from teams import find_team
+from teams import find_competition, find_team
 
 
 class _Response:
@@ -74,3 +74,10 @@ class NationalTeamTests(unittest.TestCase):
             ]
         }
         self.assertTrue(bot.event_has_team(event, "international:south-korea"))
+
+
+class CompetitionTests(unittest.TestCase):
+    def test_requested_league_aliases_resolve_to_espn_competitions(self):
+        self.assertEqual(find_competition("Championship"), ("EFL Championship", "eng.2"))
+        self.assertEqual(find_competition("MLS"), ("Major League Soccer", "usa.1"))
+        self.assertEqual(find_competition("Saudi League"), ("Saudi Pro League", "sau.1"))

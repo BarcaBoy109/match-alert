@@ -6,7 +6,7 @@ A Discord bot that monitors soccer fixtures and posts match alerts in a configur
 
 ## Discord commands
 
-Team names are matched case-insensitively. Supported teams include clubs from the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1, plus the top 50 men's national teams in the FIFA World Ranking (20 July 2026). Competition lookups also support the UEFA Champions League and the five domestic cups.
+Team names are matched case-insensitively. Supported teams include clubs from the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1, plus the top 50 men's national teams in the FIFA World Ranking (20 July 2026). Competition lookups also support the UEFA Champions League, the five domestic cups, the five second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, and the Saudi Pro League.
 
 | Command | Use |
 | --- | --- |
@@ -31,6 +31,8 @@ Example:
 /nextmatch competition:La Liga
 /nextmatch competition:UEFA Champions League
 /nextmatch competition:FA Cup
+/nextmatch competition:Championship
+/nextmatch competition:MLS
 ```
 
 The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club. `/nextmatch` accepts either a team or a competition, but not both.

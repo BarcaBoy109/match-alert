@@ -589,7 +589,7 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/setchannel channel:#football-alerts`\n"
         "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
         "Example: `/setrole role:@Football Fans`\n\n"
-        "Team names must be from the supported team lookup, including the top 50 men's national teams. Competition names can be Premier League, La Liga, Bundesliga, Serie A, Ligue 1, UEFA Champions League, FA Cup, Copa del Rey, DFB-Pokal, Coppa Italia, or Coupe de France."
+        "Team names must be from the supported team lookup, including the top 50 men's national teams. Competition names also include the five major leagues and second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, Saudi Pro League, UEFA Champions League, and domestic cups."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
 
