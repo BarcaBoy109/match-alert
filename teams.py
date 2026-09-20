@@ -300,11 +300,22 @@ COMPETITION_ALIASES = {
 }
 
 
+def normalize_team_name(name: str) -> str:
+    """Normalize a team name for aliases and fixture-name matching."""
+    return " ".join(name.casefold().replace("-", " ").split())
+
+
 def find_team(name: str):
-    """Return the canonical display name and ESPN ID for a team name."""
-    key = " ".join(name.casefold().replace("-", " ").split())
+    """Return a canonical team entry, preserving unknown fixture team names.
+
+    Known teams use ESPN IDs. Other teams use a stable name-based ID, which is
+    matched against ESPN's event display name by the bot.
+    """
+    key = normalize_team_name(name)
     key = ALIASES.get(key, key)
-    return TEAMS.get(key)
+    if not key:
+        return None
+    return TEAMS.get(key, (name.strip(), f"name:{key}"))
 
 
 def find_competition(name: str):

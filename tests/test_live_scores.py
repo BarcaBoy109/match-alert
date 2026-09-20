@@ -75,6 +75,12 @@ class NationalTeamTests(unittest.TestCase):
         }
         self.assertTrue(bot.event_has_team(event, "international:south-korea"))
 
+    def test_unlisted_league_team_uses_its_fixture_name(self):
+        team_name, team_id = find_team("FC Porto")
+        self.assertEqual((team_name, team_id), ("FC Porto", "name:fc porto"))
+        event = {"competitions": [{"competitors": [{"team": {"displayName": "FC Porto"}}]}]}
+        self.assertTrue(bot.event_has_team(event, team_id))
+
 
 class CompetitionTests(unittest.TestCase):
     def test_requested_league_aliases_resolve_to_espn_competitions(self):

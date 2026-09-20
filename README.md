@@ -6,7 +6,7 @@ A Discord bot that monitors soccer fixtures and posts match alerts in a configur
 
 ## Discord commands
 
-Team names are matched case-insensitively. Supported teams include clubs from the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1, plus the top 50 men's national teams in the FIFA World Ranking (20 July 2026). Competition lookups also support the UEFA Champions League, the five domestic cups, the five second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, and the Saudi Pro League.
+Team names are matched case-insensitively. The built-in catalog includes clubs from the Premier League, La Liga, Bundesliga, Serie A, and Ligue 1, plus the top 50 men's national teams in the FIFA World Ranking (20 July 2026). Teams not yet in that catalog, including clubs from the five second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, and the Saudi Pro League, can also be added by their ESPN fixture name. Competition lookups support the UEFA Champions League, the five domestic cups, and all of those leagues.
 
 | Command | Use |
 | --- | --- |
