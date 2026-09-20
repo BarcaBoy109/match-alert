@@ -728,18 +728,34 @@ async def fetch_recent_events(match_ids: list[str]) -> dict[str, dict]:
     now = datetime.now(timezone.utc)
     start = now - timedelta(hours=REMINDER_RETENTION_HOURS + 24)
     end = now + timedelta(days=1)
-    date_range = f"{start:%Y%m%d}-{end:%Y%m%d}"
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(
-            SCOREBOARD_URL, params={"limit": 500, "dates": date_range}
-        ) as response:
-            response.raise_for_status()
-            payload = await response.json()
-    return {
-        str(event["id"]): event
-        for event in payload.get("events", [])
-        if str(event.get("id")) in match_ids
-    }
+        # The soccer scoreboard rejects date ranges (for example, 20260919-20260920)
+        # with HTTP 400. Query individual days, as we do for upcoming fixtures.
+        events = {}
+        day = start.date()
+        while day <= end.date():
+            async with session.get(
+                SCOREBOARD_URL, params={"limit": 500, "dates": day.strftime("%Y%m%d")}
+            ) as response:
+                if response.status >= 400:
+                    body = await response.text()
+                    logger.error(
+                        "ESPN recent-score request failed: %s %s: %s",
+                        response.status,
+                        day,
+                        body[:500],
+                    )
+                    response.raise_for_status()
+                payload = await response.json()
+            events.update(
+                {
+                    str(event["id"]): event
+                    for event in payload.get("events", [])
+                    if str(event.get("id")) in match_ids
+                }
+            )
+            day += timedelta(days=1)
+    return events
 
 
 async def health(request: web.Request) -> web.Response:
@@ -899,4 +915,5 @@ class MatchAlertBot(commands.Bot):
         await self.wait_until_ready()
 
 
-MatchAlertBot().run(DISCORD_TOKEN)
+if __name__ == "__main__":
+    MatchAlertBot().run(DISCORD_TOKEN)
