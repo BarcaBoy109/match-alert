@@ -34,6 +34,8 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 - The required cross-feature fake integration scenarios and full transition reconciliation are not yet complete; no final release commit is claimed.
 
 Final verification remains open pending those scenarios.
+
+Latest progress: added a pure lifecycle transition classifier and regression coverage for equivalent timezones, kickoff changes, and exceptional status precedence. The suite now has 9 passing tests.
 - Remaining: Discord permission validation and complete status-transition delivery reconciliation require iteration 6.
 
 ## Iteration 6 — partial checkpoint

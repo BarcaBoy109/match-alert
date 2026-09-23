@@ -974,6 +974,33 @@ def lifecycle_snapshot(event: dict, team_ids: list[str] | None = None) -> dict:
     }
 
 
+def lifecycle_transition(previous: dict | None, event: dict) -> dict:
+    """Classify an observation against a saved snapshot without guessing event identity."""
+    current = lifecycle_snapshot(event)
+    if not previous:
+        current["transition"] = "baseline"
+        return current
+    old_kickoff = previous.get("kickoff")
+    new_kickoff = current.get("kickoff")
+    old_status = previous.get("status", "upcoming")
+    new_status = current["status"]
+    if old_kickoff and new_kickoff:
+        try:
+            kickoff_changed = datetime.fromisoformat(old_kickoff).astimezone(timezone.utc) != datetime.fromisoformat(new_kickoff).astimezone(timezone.utc)
+        except ValueError:
+            kickoff_changed = old_kickoff != new_kickoff
+    else:
+        kickoff_changed = old_kickoff != new_kickoff
+    if kickoff_changed:
+        current["transition"] = "rescheduled"
+        current["old_kickoff"] = old_kickoff
+    elif old_status != new_status:
+        current["transition"] = f"{old_status}_to_{new_status}"
+    else:
+        current["transition"] = "unchanged"
+    return current
+
+
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
 @app_commands.autocomplete(team=team_autocomplete)

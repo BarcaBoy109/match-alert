@@ -96,3 +96,26 @@ class CompetitionTests(unittest.TestCase):
         self.assertEqual(find_competition("Saudi League"), ("Saudi Pro League", "ksa.1"))
         self.assertEqual(find_competition("UEL"), ("UEFA Europa League", "uefa.europa"))
         self.assertEqual(find_competition("UECL"), ("UEFA Conference League", "uefa.europa.conf"))
+
+
+class LifecycleTests(unittest.TestCase):
+    def event(self, date, detail=None):
+        status = {"state": "pre", "completed": False}
+        if detail:
+            status["detail"] = detail
+        return {"id": "e1", "date": date, "status": {"type": status}, "competitions": [{"competitors": []}]}
+
+    def test_equivalent_timezone_is_not_rescheduled(self):
+        previous = bot.lifecycle_snapshot(self.event("2026-09-24T10:00:00Z"))
+        current = bot.lifecycle_transition(previous, self.event("2026-09-24T18:00:00+08:00"))
+        self.assertEqual(current["transition"], "unchanged")
+
+    def test_changed_kickoff_is_rescheduled(self):
+        previous = bot.lifecycle_snapshot(self.event("2026-09-24T10:00:00Z"))
+        current = bot.lifecycle_transition(previous, self.event("2026-09-25T10:00:00Z"))
+        self.assertEqual(current["transition"], "rescheduled")
+        self.assertEqual(current["old_kickoff"], previous["kickoff"])
+
+    def test_exceptional_status_is_not_final(self):
+        event = self.event("2026-09-24T10:00:00Z", "Postponed")
+        self.assertEqual(bot.event_phase(event), "postponed")
