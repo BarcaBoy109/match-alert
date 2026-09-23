@@ -950,8 +950,11 @@ async def fetch_recent_results(team_id: str, days: int = 30, limit: int = 10) ->
     timeout = aiohttp.ClientTimeout(total=8)
     now = datetime.now(timezone.utc)
     events = {}
+    deadline = asyncio.get_running_loop().time() + 8
     async with aiohttp.ClientSession(timeout=timeout) as session:
         for offset in range(days):
+            if asyncio.get_running_loop().time() >= deadline:
+                break
             day = (now.date() - timedelta(days=offset)).strftime("%Y%m%d")
             async with session.get(SCOREBOARD_URL, params={"limit": 500, "dates": day}) as response:
                 if response.status >= 400:
