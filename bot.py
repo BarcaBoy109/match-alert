@@ -472,6 +472,8 @@ def event_score(event: dict) -> str:
 def result_message(event: dict) -> str:
     """Format a live or final match update for a Discord reminder."""
     phase = event_phase(event)
+    if phase in {"postponed", "abandoned", "cancelled", "suspended"}:
+        return f"**{phase.upper()}**: **{event_name(event)}**"
     label = "LIVE" if phase == "live" else "FINAL"
     detail = event.get("status", {}).get("type", {}).get("detail")
     suffix = f" ({detail})" if detail and phase == "live" else ""
