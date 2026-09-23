@@ -128,6 +128,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("RESCHEDULED", notice)
         self.assertEqual(notice.count("<t:"), 2)
 
+    def test_postponed_to_scheduled_same_kickoff_is_a_status_transition(self):
+        previous = bot.lifecycle_snapshot(self.event("2026-09-24T10:00:00Z", "Postponed"))
+        current = bot.lifecycle_transition(previous, self.event("2026-09-24T10:00:00Z"))
+        self.assertEqual(current["transition"], "postponed_to_upcoming")
+        self.assertIsNone(bot.lifecycle_notice(previous, self.event("2026-09-24T10:00:00Z")))
+
+    def test_live_to_abandoned_is_not_final(self):
+        previous_event = self.event("2026-09-24T10:00:00Z")
+        previous_event["status"]["type"]["state"] = "in"
+        previous = bot.lifecycle_snapshot(previous_event)
+        abandoned = self.event("2026-09-24T10:00:00Z", "Abandoned")
+        current = bot.lifecycle_transition(previous, abandoned)
+        self.assertEqual(current["transition"], "live_to_abandoned")
+        self.assertIn("ABANDONED", bot.lifecycle_notice(previous, abandoned))
+
 
 class AutocompleteTests(unittest.TestCase):
     def test_aliases_deduplicate_to_canonical_choices(self):
