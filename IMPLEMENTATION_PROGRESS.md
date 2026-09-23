@@ -50,7 +50,7 @@ Ordinary delivery checks now deduplicate by destination channel and isolate Disc
 ## Iteration 6 — partial checkpoint
 
 - Ordinary alert candidates are grouped by guild, event, and effective destination channel; role mentions are deduplicated and inherited/overridden routes are respected.
-- Known limitation: delivery records remain in the legacy single-row announced-match model, so transition replacement delivery and partial-failure retry are not complete.
+- Delivery records now have an additive per-destination model, and ordinary send failures are isolated for retry. Full Discord fake workflow coverage remains outstanding.
 
 ## Iteration 7 — complete
 
