@@ -36,6 +36,7 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 Final verification remains open pending those scenarios.
 Migration instructions now describe the additive schema upgrade and legacy delivery backfill; execution remains unverified because local PostgreSQL authentication is unavailable.
 Added deterministic routing-group tests for shared channels, role union, and separate overridden channels; suite now has 16 passing tests.
+Verified `supabase/schema.sql` against a disposable local PostgreSQL 17 cluster: fresh application passed, repeated application passed, and a representative legacy `announced_matches` row backfilled to `alert_deliveries`. The disposable cluster was stopped and removed afterward.
 
 Latest progress: added a pure lifecycle transition classifier and regression coverage for equivalent timezones, kickoff changes, and exceptional status precedence. The suite now has 9 passing tests.
 Added transition notice formatting with old/new Discord timestamps; suite now has 10 passing tests.
