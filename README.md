@@ -42,7 +42,7 @@ Example:
 
 The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club. `/nextmatch` accepts either a team or a competition, but not both.
 
-Team options provide local autocomplete for canonical names and aliases. Per-team routing inherits the server channel and role independently unless an override is set. Exceptional ESPN statuses are labelled separately from final results. The Supabase schema is additive and can be applied with the SQL in `supabase/schema.sql` or the standalone migration under `supabase/migrations/`; it was verified against a disposable local PostgreSQL 17 cluster. The user's Supabase instance was not independently inspected.
+Team options provide local autocomplete for canonical names and aliases. Per-team routing inherits the server channel and role independently unless an override is set. Exceptional ESPN statuses are labelled separately from final results. For a new Supabase project, run the complete `supabase/full_schema.sql`; for an existing project, use the standalone migration under `supabase/migrations/`. The schema was verified against a disposable local PostgreSQL 17 cluster. The user's Supabase instance was not independently inspected.
 
 ## Local setup
 
