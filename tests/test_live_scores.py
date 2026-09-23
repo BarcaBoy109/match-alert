@@ -210,3 +210,16 @@ class ResultFormattingTests(unittest.TestCase):
     def test_abandoned_event_is_not_a_recent_result(self):
         event = {"status": {"type": {"state": "post", "completed": True, "detail": "Abandoned"}}, "competitions": [{}]}
         self.assertNotEqual(bot.event_phase(event), "final")
+
+
+class CommandRegistrationTests(unittest.TestCase):
+    def test_all_team_commands_have_autocomplete(self):
+        commands = (
+            bot.configure_command, bot.addteam_command, bot.removeteam_command,
+            bot.nextmatch_command, bot.results_command, bot.setchannel_command,
+            bot.setrole_command, bot.resetalerts_command,
+        )
+        for command in commands:
+            with self.subTest(command=command.name):
+                self.assertIn("team", command._params)
+                self.assertIsNotNone(command._params["team"].autocomplete)
