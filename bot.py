@@ -115,6 +115,26 @@ class StateStore:
             return [(guild_state["team_name"], str(guild_state["team_id"]))]
         return [(DEFAULT_TEAM_NAME, DEFAULT_TEAM_ID)]
 
+    async def save_lifecycle(self, guild_id: int, event_id: str, snapshot: dict) -> None:
+        """Persist observed fixture state separately from disposable message metadata."""
+        if self.pool:
+            await self.pool.execute(
+                """INSERT INTO match_lifecycle (guild_id, event_id, kickoff, status, team_ids, observed_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (guild_id, event_id) DO UPDATE SET kickoff=EXCLUDED.kickoff,
+                status=EXCLUDED.status, team_ids=EXCLUDED.team_ids, observed_at=EXCLUDED.observed_at""",
+                guild_id, event_id, snapshot.get("kickoff"), snapshot.get("status"), snapshot.get("team_ids", []), snapshot.get("observed_at"),
+            )
+            return
+        self.local_state.setdefault("match_lifecycle", {})[f"{guild_id}:{event_id}"] = snapshot
+        save_state(self.local_state)
+
+    async def get_lifecycle(self, guild_id: int, event_id: str) -> dict | None:
+        if self.pool:
+            row = await self.pool.fetchrow("SELECT * FROM match_lifecycle WHERE guild_id=$1 AND event_id=$2", guild_id, event_id)
+            return dict(row) if row else None
+        return self.local_state.get("match_lifecycle", {}).get(f"{guild_id}:{event_id}")
+
     async def set_guild_favourite(self, guild_id: int, team_name: str, team_id: str) -> None:
         """Set the favourite team and ensure it is included in match alerts."""
         if self.pool:

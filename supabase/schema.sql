@@ -33,3 +33,13 @@ create table if not exists public.announced_matches (
 alter table public.announced_matches add column if not exists channel_id bigint;
 alter table public.announced_matches add column if not exists message_id bigint;
 alter table public.announced_matches add column if not exists delete_after timestamptz;
+
+create table if not exists public.match_lifecycle (
+  guild_id bigint not null,
+  event_id text not null,
+  kickoff timestamptz,
+  status text not null,
+  team_ids text[] not null default '{}',
+  observed_at timestamptz not null default now(),
+  primary key (guild_id, event_id)
+);
