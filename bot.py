@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -12,7 +13,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from teams import find_competition, find_team
+from teams import ALIASES, TEAMS, find_competition, find_team
 
 load_dotenv()
 
@@ -390,11 +391,50 @@ def event_has_team(event: dict, team_id: str) -> bool:
 def event_phase(event: dict) -> str:
     """Return whether an ESPN event is upcoming, live, or final."""
     status_type = event.get("status", {}).get("type", {})
+    detail = " ".join(str(status_type.get(key, "")) for key in ("name", "detail", "description")).casefold()
+    if any(word in detail for word in ("postponed", "abandoned", "cancelled", "canceled", "suspended")):
+        return exceptional_status(event)
     if status_type.get("completed") or status_type.get("state") == "post":
         return "final"
     if status_type.get("state") == "in":
         return "live"
     return "upcoming"
+
+
+def exceptional_status(event: dict) -> str:
+    """Return an explicit exceptional ESPN status, or an empty string."""
+    status_type = event.get("status", {}).get("type", {})
+    detail = " ".join(str(status_type.get(key, "")) for key in ("name", "detail", "description")).casefold()
+    for word, label in (("postponed", "postponed"), ("abandoned", "abandoned"),
+                        ("cancelled", "cancelled"), ("canceled", "cancelled"), ("suspended", "suspended")):
+        if word in detail:
+            return label
+    return ""
+
+
+def normalize_team_query(value: str) -> str:
+    return " ".join(value.casefold().replace("-", " ").split())
+
+
+def team_suggestions(query: str) -> list[tuple[str, str]]:
+    """Return deterministic local autocomplete choices, without network calls."""
+    needle = normalize_team_query(query)
+    candidates = {}
+    for key, (display, team_id) in TEAMS.items():
+        candidates.setdefault(team_id, (display, key, 0 if key == needle else 1 if key.startswith(needle) else 2))
+    for alias, key in ALIASES.items():
+        selected = TEAMS.get(key)
+        if selected and alias == needle or selected and (alias.startswith(needle) or needle in alias):
+            display, team_id = selected
+            rank = 0 if alias == needle else 1 if alias.startswith(needle) else 2
+            current = candidates.get(team_id)
+            if current is None or rank < current[2]:
+                candidates[team_id] = (display, key, rank)
+    return [(display, display) for display, key, rank in sorted(candidates.values(), key=lambda item: (item[2], item[0].casefold())) if not needle or rank < 3][:25]
+
+
+async def team_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+    return [app_commands.Choice(name=name[:100], value=value[:100]) for name, value in team_suggestions(current)]
 
 
 def event_score(event: dict) -> str:
@@ -467,6 +507,7 @@ async def setrole_command(interaction: discord.Interaction, role: discord.Role) 
 
 @app_commands.command(name="configure", description="Choose this server's favourite team.")
 @app_commands.describe(team="Team name, for example Real Madrid or Japan")
+@app_commands.autocomplete(team=team_autocomplete)
 @app_commands.checks.has_permissions(manage_guild=True)
 async def configure_command(interaction: discord.Interaction, team: str) -> None:
     """Configure the guild's monitored team using the ESPN lookup table."""
@@ -489,6 +530,7 @@ async def configure_command(interaction: discord.Interaction, team: str) -> None
 
 @app_commands.command(name="addteam", description="Add a team to this server's match alerts.")
 @app_commands.describe(team="Team name, for example Arsenal or Japan")
+@app_commands.autocomplete(team=team_autocomplete)
 @app_commands.checks.has_permissions(manage_guild=True)
 async def addteam_command(interaction: discord.Interaction, team: str) -> None:
     """Add one team to the guild's monitored teams."""
@@ -513,6 +555,7 @@ async def addteam_command(interaction: discord.Interaction, team: str) -> None:
 
 @app_commands.command(name="removeteam", description="Remove a team from this server's match alerts.")
 @app_commands.describe(team="Team name, for example Arsenal or Japan")
+@app_commands.autocomplete(team=team_autocomplete)
 @app_commands.checks.has_permissions(manage_guild=True)
 async def removeteam_command(interaction: discord.Interaction, team: str) -> None:
     """Remove one team from the guild's monitored teams."""
@@ -578,6 +621,7 @@ async def help_command(interaction: discord.Interaction) -> None:
         "`/nextmatch competition:Premier League` — Show the next match in a supported competition.\n"
         "Example: `/nextmatch competition:La Liga`\n"
         "`/teams` — List the teams monitored by this server.\n\n"
+        "`/results [team:<team>] [limit:<1-10>]` — Show completed results from the last 30 days.\n\n"
         "**Server managers (Manage Server permission)**\n"
         "`/configure team:<club>` — Set the favourite team.\n"
         "Example: `/configure team:FC Barcelona`\n"
@@ -599,6 +643,7 @@ async def help_command(interaction: discord.Interaction) -> None:
     team="Optional team name, for example Real Madrid or Japan",
     competition="Optional competition name, for example Premier League",
 )
+@app_commands.autocomplete(team=team_autocomplete)
 async def nextmatch_command(
     interaction: discord.Interaction,
     team: str | None = None,
@@ -771,6 +816,71 @@ async def fetch_recent_events(match_ids: list[str]) -> dict[str, dict]:
     return events
 
 
+async def fetch_recent_results(team_id: str, days: int = 30, limit: int = 10) -> list[dict]:
+    """Fetch completed, non-exceptional results for a supported team."""
+    timeout = aiohttp.ClientTimeout(total=8)
+    now = datetime.now(timezone.utc)
+    events = {}
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for offset in range(days):
+            day = (now.date() - timedelta(days=offset)).strftime("%Y%m%d")
+            async with session.get(SCOREBOARD_URL, params={"limit": 500, "dates": day}) as response:
+                if response.status >= 400:
+                    response.raise_for_status()
+                payload = await response.json()
+            for event in payload.get("events", []):
+                event_id = event.get("id")
+                if not event_id or not event_has_team(event, str(team_id)) or event_phase(event) != "final":
+                    continue
+                try:
+                    start = datetime.fromisoformat(event["date"].replace("Z", "+00:00")).astimezone(timezone.utc)
+                    if not event_score_has_values(event):
+                        continue
+                except (KeyError, TypeError, ValueError):
+                    continue
+                events[str(event_id)] = (start, event)
+            if len(events) >= limit:
+                break
+    return [event for _, event in sorted(events.values(), key=lambda pair: pair[0], reverse=True)[:limit]]
+
+
+def event_score_has_values(event: dict) -> bool:
+    competitors = event.get("competitions", [{}])[0].get("competitors", [])
+    return len(competitors) >= 2 and all(item.get("score") is not None for item in competitors[:2])
+
+
+def format_result(event: dict) -> str:
+    timestamp = kickoff_unix(event)
+    return f"**{event_name(event)}** — **{event_score(event)}** (<t:{timestamp}:d>)"
+
+
+@app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
+@app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
+async def results_command(interaction: discord.Interaction, team: str | None = None, limit: app_commands.Range[int, 1, 10] = 5) -> None:
+    await interaction.response.defer(ephemeral=True)
+    if interaction.guild_id is None and team is None:
+        await interaction.edit_original_response(content="Choose a team when using /results in a DM.")
+        return
+    try:
+        if team is None:
+            settings = await interaction.client.store.get_guild(interaction.guild_id)
+            selected = (settings.get("team_name", DEFAULT_TEAM_NAME), str(settings.get("team_id", DEFAULT_TEAM_ID)))
+        else:
+            selected = find_team(team)
+        if not selected:
+            await interaction.edit_original_response(content="That team is not in the supported team lookup.")
+            return
+        name, team_id = selected
+        results = await fetch_recent_results(team_id, limit=limit)
+        content = f"**{name} results — last 30 days**\n" + ("\n".join(format_result(event) for event in results) if results else "No completed results found.")
+        await interaction.edit_original_response(content=content[:1900])
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        await interaction.edit_original_response(content="The match data service is temporarily unavailable. Please try again shortly.")
+    except Exception:
+        logger.exception("/results failed")
+        await interaction.edit_original_response(content="I could not fetch results right now. Please try again shortly.")
+
+
 async def health(request: web.Request) -> web.Response:
     """Return the lightweight HTTP health-check response."""
     return web.json_response({"ok": True, "service": "match-alert"})
@@ -788,6 +898,7 @@ class MatchAlertBot(commands.Bot):
         self.tree.add_command(teams_command)
         self.tree.add_command(help_command)
         self.tree.add_command(nextmatch_command)
+        self.tree.add_command(results_command)
         self.tree.add_command(configure_command)
         self._commands_synced = False
         self.health_runner: web.AppRunner | None = None

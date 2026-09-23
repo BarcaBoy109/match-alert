@@ -17,6 +17,7 @@ Team names are matched case-insensitively against the catalog in [`teams.py`](te
 | `/nextmatch` | Show the favourite team's next match within seven days. |
 | `/nextmatch team:<name>` | Check another supported team's next match without changing settings. |
 | `/nextmatch competition:<name>` | Show the next match in a supported competition within seven days. |
+| `/results [team:<name>] [limit:<1-10>]` | Show completed results from the trailing 30 days. |
 | `/setchannel channel:<channel>` | Choose where alerts are posted. Requires Manage Server. |
 | `/setrole role:<role>` | Choose the role mentioned in alerts. Requires Manage Server. |
 
