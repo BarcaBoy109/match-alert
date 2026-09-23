@@ -1136,13 +1136,15 @@ class MatchAlertBot(commands.Bot):
                 guild_id, match_id = announced_id.split(":", 1)
                 event = events.get(match_id)
                 guild = guilds.get(int(guild_id))
-                if event is None or guild is None or event_phase(event) == "upcoming":
+                previous = await self.store.get_lifecycle(int(guild_id), match_id) if event is not None else None
+                if event is None or guild is None or (event_phase(event) == "upcoming" and not lifecycle_notice(previous, event)):
                     continue
                 channel = guild.get_channel(int(reminder["channel_id"]))
                 if channel is None:
                     continue
                 message = await channel.fetch_message(int(reminder["message_id"]))
-                await message.edit(content=result_message(event))
+                await message.edit(content=lifecycle_notice(previous, event) or result_message(event))
+                await self.store.save_lifecycle(int(guild_id), match_id, lifecycle_snapshot(event))
             except discord.NotFound:
                 await self.store.clear_reminder(announced_id)
             except discord.Forbidden:
