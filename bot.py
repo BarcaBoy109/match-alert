@@ -1146,7 +1146,20 @@ class MatchAlertBot(commands.Bot):
                 await message.edit(content=lifecycle_notice(previous, event) or result_message(event))
                 await self.store.save_lifecycle(int(guild_id), match_id, lifecycle_snapshot(event))
             except discord.NotFound:
-                await self.store.clear_reminder(announced_id)
+                # The lifecycle record survives message deletion. Re-post once in the
+                # original destination so a later status transition remains visible.
+                try:
+                    replacement = await channel.send(
+                        lifecycle_notice(previous, event) or result_message(event),
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                    delete_after = datetime.now(timezone.utc) + timedelta(hours=REMINDER_RETENTION_HOURS)
+                    await self.store.save_reminder(
+                        match_id, int(guild_id), channel.id, replacement.id, delete_after
+                    )
+                    await self.store.save_lifecycle(int(guild_id), match_id, lifecycle_snapshot(event))
+                except discord.HTTPException:
+                    logger.exception("Failed to replace deleted reminder %s", match_id)
             except discord.Forbidden:
                 logger.warning("Cannot update reminder %s", reminder["message_id"])
             except discord.HTTPException:

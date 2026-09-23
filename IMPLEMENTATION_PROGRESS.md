@@ -37,6 +37,7 @@ Final verification remains open pending those scenarios.
 
 Latest progress: added a pure lifecycle transition classifier and regression coverage for equivalent timezones, kickoff changes, and exceptional status precedence. The suite now has 9 passing tests.
 Added transition notice formatting with old/new Discord timestamps; suite now has 10 passing tests.
+Deleted active reminders now attempt one replacement in their original saved channel, with a fresh retention deadline and lifecycle snapshot.
 - Remaining: Discord permission validation and complete status-transition delivery reconciliation require iteration 6.
 
 ## Iteration 6 — partial checkpoint
