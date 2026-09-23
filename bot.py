@@ -1001,6 +1001,21 @@ def lifecycle_transition(previous: dict | None, event: dict) -> dict:
     return current
 
 
+def lifecycle_notice(previous: dict | None, event: dict) -> str | None:
+    """Format a transition notice; return None when no notification is needed."""
+    transition = lifecycle_transition(previous, event)
+    phase = transition["status"]
+    if transition["transition"] == "rescheduled":
+        old = transition.get("old_kickoff")
+        old_timestamp = int(datetime.fromisoformat(old).timestamp()) if old else None
+        new_timestamp = kickoff_unix(event) if transition.get("kickoff") else None
+        if old_timestamp is not None and new_timestamp is not None:
+            return f"**RESCHEDULED**: **{event_name(event)}**\nWas: <t:{old_timestamp}:f>\nNow: <t:{new_timestamp}:f>"
+    if phase in {"postponed", "abandoned", "cancelled", "suspended"} and transition["transition"] != "unchanged":
+        return f"**{phase.upper()}**: **{event_name(event)}**"
+    return None
+
+
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
 @app_commands.autocomplete(team=team_autocomplete)

@@ -119,3 +119,9 @@ class LifecycleTests(unittest.TestCase):
     def test_exceptional_status_is_not_final(self):
         event = self.event("2026-09-24T10:00:00Z", "Postponed")
         self.assertEqual(bot.event_phase(event), "postponed")
+
+    def test_reschedule_notice_contains_both_discord_timestamps(self):
+        previous = bot.lifecycle_snapshot(self.event("2026-09-24T10:00:00Z"))
+        notice = bot.lifecycle_notice(previous, self.event("2026-09-25T10:00:00Z"))
+        self.assertIn("RESCHEDULED", notice)
+        self.assertEqual(notice.count("<t:"), 2)
