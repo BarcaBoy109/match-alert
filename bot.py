@@ -762,10 +762,12 @@ async def help_command(interaction: discord.Interaction) -> None:
         "Example: `/addteam team:Arsenal`\n"
         "`/removeteam team:<club>` — Stop monitoring a team.\n"
         "Example: `/removeteam team:Arsenal`\n"
-        "`/setchannel channel:<channel>` — Choose where alerts are posted.\n"
-        "Example: `/setchannel channel:#football-alerts`\n"
-        "`/setrole role:<role>` — Choose the role mentioned in alerts.\n"
-        "Example: `/setrole role:@Football Fans`\n\n"
+        "`/setchannel channel:<channel> [team:<team>]` — Set the server default or a monitored team's alert channel.\n"
+        "Example: `/setchannel channel:#football-alerts team:Arsenal`\n"
+        "`/setrole role:<role> [team:<team>]` — Set the server default or a monitored team's alert role.\n"
+        "Example: `/setrole role:@Football Fans team:Arsenal`\n"
+        "`/resetalerts team:<team> setting:<channel|role|both>` — Reset overrides so they inherit server defaults.\n"
+        "Exceptional fixtures are labelled POSTPONED, ABANDONED, CANCELLED, or SUSPENDED; reschedules show old and new kickoff times.\n\n"
         "Team names must be from the supported team lookup, including the top 50 men's national teams. Competition names also include the five major leagues and second divisions, Primeira Liga, Eredivisie, Süper Lig, MLS, Saudi Pro League, UEFA Champions League, and domestic cups."
     )
     await interaction.response.send_message(content=content, ephemeral=True)
