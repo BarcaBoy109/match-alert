@@ -1227,7 +1227,13 @@ class MatchAlertBot(commands.Bot):
                     role_id = route.get("role_id") or guild_state.get("role_id")
                     if role_id: destinations[(str(match["id"]), int(channel_id))]["roles"].add(int(role_id))
                 for (match_id, channel_id), candidate in destinations.items():
-                    if await self.store.has_announced(match_id, guild.id):
+                    deliveries = await self.store.get_deliveries(guild.id, match_id)
+                    if deliveries:
+                        if any(int(item.get("channel_id", 0)) == channel_id for item in deliveries):
+                            continue
+                    elif await self.store.has_announced(match_id, guild.id):
+                        # Legacy rows without a saved channel conservatively suppress
+                        # ordinary duplicates until a status transition requires one.
                         continue
                     channel = guild.get_channel(channel_id)
                     if channel is None:
@@ -1237,20 +1243,23 @@ class MatchAlertBot(commands.Bot):
                     role_mention = f"{role_mention} " if role_mention else ""
                     match = candidate["match"]
                     timestamp = kickoff_unix(match)
-                    message = await channel.send(
-                        f"{role_mention}{', '.join(candidate['teams'])} match incoming: **{event_name(match)}**\n"
-                        f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)",
-                        allowed_mentions=discord.AllowedMentions(roles=True),
-                    )
-                    await self.store.mark_announced(str(match["id"]), guild.id)
-                    delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
-                        hours=REMINDER_RETENTION_HOURS
-                    )
-                    await self.store.save_reminder(
-                        str(match["id"]), guild.id, channel.id, message.id, delete_after
-                    )
-                    await self.store.save_delivery(guild.id, str(match["id"]), channel.id, message.id, delete_after)
-                    logger.info("Announced %s in %s", event_name(match), guild.name)
+                    try:
+                        message = await channel.send(
+                            f"{role_mention}{', '.join(candidate['teams'])} match incoming: **{event_name(match)}**\n"
+                            f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)",
+                            allowed_mentions=discord.AllowedMentions(roles=True),
+                        )
+                        await self.store.mark_announced(str(match["id"]), guild.id)
+                        delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
+                            hours=REMINDER_RETENTION_HOURS
+                        )
+                        await self.store.save_reminder(
+                            str(match["id"]), guild.id, channel.id, message.id, delete_after
+                        )
+                        await self.store.save_delivery(guild.id, str(match["id"]), channel.id, message.id, delete_after)
+                        logger.info("Announced %s in %s", event_name(match), guild.name)
+                    except discord.HTTPException:
+                        logger.exception("Failed to announce %s in %s", event_name(match), guild.name)
         except Exception:
             logger.exception("Schedule poll failed")
 
