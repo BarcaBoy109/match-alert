@@ -125,3 +125,21 @@ class LifecycleTests(unittest.TestCase):
         notice = bot.lifecycle_notice(previous, self.event("2026-09-25T10:00:00Z"))
         self.assertIn("RESCHEDULED", notice)
         self.assertEqual(notice.count("<t:"), 2)
+
+
+class AutocompleteTests(unittest.TestCase):
+    def test_aliases_deduplicate_to_canonical_choices(self):
+        choices = bot.team_suggestions("barca")
+        self.assertTrue(choices)
+        self.assertEqual(len({bot.find_team(value)[1] for _, value in choices}), len(choices))
+        self.assertTrue(any(name == "Barcelona" and bot.find_team(value) for name, value in choices))
+
+    def test_suggestions_are_bounded_and_round_trip(self):
+        choices = bot.team_suggestions("")
+        self.assertLessEqual(len(choices), 25)
+        for _, value in choices:
+            self.assertIsNotNone(bot.find_team(value))
+
+    def test_exact_match_precedes_prefix_match(self):
+        choices = bot.team_suggestions("Japan")
+        self.assertEqual(choices[0][0], "Japan")

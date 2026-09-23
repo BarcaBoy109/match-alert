@@ -511,6 +511,8 @@ def team_suggestions(query: str) -> list[tuple[str, str]]:
     needle = normalize_team_query(query)
     candidates = {}
     for key, (display, team_id) in TEAMS.items():
+        if needle and needle not in key and not key.startswith(needle):
+            continue
         candidates.setdefault(team_id, (display, key, 0 if key == needle else 1 if key.startswith(needle) else 2))
     for alias, key in ALIASES.items():
         selected = TEAMS.get(key)
@@ -520,7 +522,7 @@ def team_suggestions(query: str) -> list[tuple[str, str]]:
             current = candidates.get(team_id)
             if current is None or rank < current[2]:
                 candidates[team_id] = (display, key, rank)
-    return [(display, display) for display, key, rank in sorted(candidates.values(), key=lambda item: (item[2], item[0].casefold())) if not needle or rank < 3][:25]
+    return [(display, key) for display, key, rank in sorted(candidates.values(), key=lambda item: (item[2], item[0].casefold())) if not needle or rank < 3][:25]
 
 
 async def team_autocomplete(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
