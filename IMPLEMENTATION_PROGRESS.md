@@ -34,7 +34,7 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 - The required cross-feature fake integration scenarios and full transition reconciliation are not yet complete; no final release commit is claimed.
 
 Final verification remains open pending those scenarios.
-Migration instructions now describe the additive schema upgrade and legacy delivery backfill; execution remains unverified because local PostgreSQL authentication is unavailable.
+Migration instructions describe the additive schema upgrade and legacy delivery backfill; execution was verified against a disposable local PostgreSQL 17 cluster, while the user's Supabase instance was not independently inspected.
 Added deterministic routing-group tests for shared channels, role union, and separate overridden channels; suite now has 16 passing tests.
 Verified `supabase/schema.sql` against a disposable local PostgreSQL 17 cluster: fresh application passed, repeated application passed, and a representative legacy `announced_matches` row backfilled to `alert_deliveries`. The disposable cluster was stopped and removed afterward.
 Added deterministic postponed-to-scheduled and live-to-abandoned transition tests; suite now has 18 passing tests.
