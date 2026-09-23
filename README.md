@@ -20,6 +20,7 @@ Team names are matched case-insensitively against the catalog in [`teams.py`](te
 | `/results [team:<name>] [limit:<1-10>]` | Show completed results from the trailing 30 days. |
 | `/setchannel channel:<channel>` | Choose where alerts are posted. Requires Manage Server. |
 | `/setrole role:<role>` | Choose the role mentioned in alerts. Requires Manage Server. |
+| `/resetalerts team:<name> setting:<channel\|role\|both>` | Reset a team's override so it inherits the server default. |
 
 Example:
 
@@ -40,6 +41,8 @@ Example:
 ```
 
 The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club. `/nextmatch` accepts either a team or a competition, but not both.
+
+Team options provide local autocomplete for canonical names and aliases. Per-team routing inherits the server channel and role independently unless an override is set. Exceptional ESPN statuses are labelled separately from final results. The Supabase schema is additive and can be applied with the SQL in `supabase/schema.sql`; real PostgreSQL migration execution was not available in this verification run.
 
 ## Local setup
 
