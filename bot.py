@@ -115,6 +115,53 @@ class StateStore:
             return [(guild_state["team_name"], str(guild_state["team_id"]))]
         return [(DEFAULT_TEAM_NAME, DEFAULT_TEAM_ID)]
 
+    async def get_team_settings(self, guild_id: int, team_id: str) -> dict:
+        """Return one team's optional routing overrides, tolerating legacy records."""
+        if self.pool:
+            row = await self.pool.fetchrow(
+                "SELECT team_name, team_id, channel_id, role_id FROM guild_teams WHERE guild_id=$1 AND team_id=$2",
+                guild_id, str(team_id),
+            )
+            return dict(row) if row else {}
+        for team in self.local_state.get("guilds", {}).get(str(guild_id), {}).get("teams", []):
+            if str(team.get("team_id")) == str(team_id):
+                return dict(team)
+        return {}
+
+    async def set_team_route(self, guild_id: int, team_name: str, team_id: str, *, channel_id=None, role_id=None) -> None:
+        """Set only supplied team overrides; omitted values remain unchanged."""
+        if self.pool:
+            await self.pool.execute(
+                """INSERT INTO guild_teams (guild_id, team_id, team_name, channel_id, role_id)
+                VALUES ($1,$2,$3,$4,$5) ON CONFLICT (guild_id,team_id) DO UPDATE SET
+                team_name=EXCLUDED.team_name, channel_id=COALESCE($4,guild_teams.channel_id), role_id=COALESCE($5,guild_teams.role_id)""",
+                guild_id, str(team_id), team_name, channel_id, role_id,
+            )
+            return
+        guild = self.local_state.setdefault("guilds", {}).setdefault(str(guild_id), {})
+        teams = guild.setdefault("teams", [{"team_id": str(guild.get("team_id", DEFAULT_TEAM_ID)), "team_name": guild.get("team_name", DEFAULT_TEAM_NAME)}])
+        team = next((item for item in teams if str(item.get("team_id")) == str(team_id)), None)
+        if team is None:
+            team = {"team_id": str(team_id), "team_name": team_name}
+            teams.append(team)
+        team["team_name"] = team_name
+        if channel_id is not None: team["channel_id"] = channel_id
+        if role_id is not None: team["role_id"] = role_id
+        save_state(self.local_state)
+
+    async def reset_team_route(self, guild_id: int, team_id: str, setting: str) -> None:
+        if self.pool:
+            columns = "channel_id=NULL" if setting == "channel" else "role_id=NULL" if setting == "role" else "channel_id=NULL, role_id=NULL"
+            await self.pool.execute(f"UPDATE guild_teams SET {columns} WHERE guild_id=$1 AND team_id=$2", guild_id, str(team_id))
+            return
+        team = await self.get_team_settings(guild_id, team_id)
+        for key in (("channel_id",) if setting == "channel" else ("role_id",) if setting == "role" else ("channel_id", "role_id")):
+            team.pop(key, None)
+        guild = self.local_state.get("guilds", {}).get(str(guild_id), {})
+        for item in guild.get("teams", []):
+            if str(item.get("team_id")) == str(team_id): item.clear(); item.update(team)
+        save_state(self.local_state)
+
     async def save_lifecycle(self, guild_id: int, event_id: str, snapshot: dict) -> None:
         """Persist observed fixture state separately from disposable message metadata."""
         if self.pool:
@@ -484,15 +531,24 @@ def result_message(event: dict) -> str:
     name="setchannel",
     description="Choose where match alerts are posted.",
 )
-@app_commands.describe(channel="The text channel for match alerts")
+@app_commands.describe(channel="The text channel for match alerts", team="Optional monitored team override")
+@app_commands.autocomplete(team=team_autocomplete)
 @app_commands.checks.has_permissions(manage_guild=True)
-async def setchannel_command(interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+async def setchannel_command(interaction: discord.Interaction, channel: discord.TextChannel, team: str | None = None) -> None:
     """Configure the guild channel used for match alerts."""
     bot = interaction.client
     if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
-    await bot.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
+    if team:
+        selected = find_team(team)
+        monitored = await bot.store.get_guild_teams(interaction.guild_id)
+        if not selected or not any(team_id == selected[1] for _, team_id in monitored):
+            await interaction.edit_original_response(content="Choose a supported team monitored by this server.")
+            return
+        await bot.store.set_team_route(interaction.guild_id, selected[0], selected[1], channel_id=channel.id)
+    else:
+        await bot.store.set_guild_value(interaction.guild_id, "channel_id", channel.id)
     await interaction.edit_original_response(
         content=f"Match alerts will be posted in {channel.mention}."
     )
@@ -514,15 +570,24 @@ async def setchannel_command_error(
 
 
 @app_commands.command(name="setrole", description="Choose the role to mention in match alerts.")
-@app_commands.describe(role="The role to mention")
+@app_commands.describe(role="The role to mention", team="Optional monitored team override")
+@app_commands.autocomplete(team=team_autocomplete)
 @app_commands.checks.has_permissions(manage_guild=True)
-async def setrole_command(interaction: discord.Interaction, role: discord.Role) -> None:
+async def setrole_command(interaction: discord.Interaction, role: discord.Role, team: str | None = None) -> None:
     """Configure the guild role mentioned in match alerts."""
     bot = interaction.client
     if not isinstance(bot, MatchAlertBot):
         return
     await interaction.response.defer(ephemeral=True)
-    await bot.store.set_guild_value(interaction.guild_id, "role_id", role.id)
+    if team:
+        selected = find_team(team)
+        monitored = await bot.store.get_guild_teams(interaction.guild_id)
+        if not selected or not any(team_id == selected[1] for _, team_id in monitored):
+            await interaction.edit_original_response(content="Choose a supported team monitored by this server.")
+            return
+        await bot.store.set_team_route(interaction.guild_id, selected[0], selected[1], role_id=role.id)
+    else:
+        await bot.store.set_guild_value(interaction.guild_id, "role_id", role.id)
     await interaction.edit_original_response(
         content=f"I will mention {role.mention} in match alerts."
     )
@@ -628,6 +693,23 @@ async def teams_command(interaction: discord.Interaction) -> None:
         for team_name, team_id in teams
     )
     await interaction.edit_original_response(content=content)
+
+
+@app_commands.command(name="resetalerts", description="Reset a team's channel and/or role override.")
+@app_commands.describe(team="Monitored team", setting="Override to reset")
+@app_commands.autocomplete(team=team_autocomplete)
+@app_commands.choices(setting=[app_commands.Choice(name="channel", value="channel"), app_commands.Choice(name="role", value="role"), app_commands.Choice(name="both", value="both")])
+@app_commands.checks.has_permissions(manage_guild=True)
+async def resetalerts_command(interaction: discord.Interaction, team: str, setting: str = "both") -> None:
+    bot = interaction.client
+    selected = find_team(team)
+    await interaction.response.defer(ephemeral=True)
+    monitored = await bot.store.get_guild_teams(interaction.guild_id)
+    if not selected or not any(team_id == selected[1] for _, team_id in monitored):
+        await interaction.edit_original_response(content="Choose a supported team monitored by this server.")
+        return
+    await bot.store.reset_team_route(interaction.guild_id, selected[1], setting)
+    await interaction.edit_original_response(content=f"Reset {setting} alert override for **{selected[0]}**.")
 
 
 @app_commands.command(name="help", description="Show the bot commands and examples.")
@@ -915,6 +997,7 @@ class MatchAlertBot(commands.Bot):
         self.store = StateStore()
         self.tree.add_command(setchannel_command)
         self.tree.add_command(setrole_command)
+        self.tree.add_command(resetalerts_command)
         self.tree.add_command(addteam_command)
         self.tree.add_command(removeteam_command)
         self.tree.add_command(teams_command)
@@ -1027,22 +1110,32 @@ class MatchAlertBot(commands.Bot):
 
             matches = await fetch_next_matches(list(all_team_ids))
             for guild, guild_state, teams in guild_configs:
-                channel_id = guild_state.get("channel_id")
-                if not channel_id:
-                    continue
-                channel = guild.get_channel(channel_id)
-                if channel is None:
-                    logger.warning("Configured channel is unavailable in %s", guild.name)
-                    continue
-                role_id = guild_state.get("role_id")
-                role_mention = f"<@&{role_id}> " if role_id else ""
+                destinations = {}
                 for team_name, team_id in teams:
                     match = matches[team_id]
-                    if not match or await self.store.has_announced(str(match["id"]), guild.id):
+                    if not match or exceptional_status(match):
                         continue
+                    route = await self.store.get_team_settings(guild.id, team_id)
+                    channel_id = route.get("channel_id") or guild_state.get("channel_id")
+                    if not channel_id:
+                        continue
+                    destinations.setdefault((str(match["id"]), int(channel_id)), {"match": match, "teams": [], "roles": set()})
+                    destinations[(str(match["id"]), int(channel_id))]["teams"].append(team_name)
+                    role_id = route.get("role_id") or guild_state.get("role_id")
+                    if role_id: destinations[(str(match["id"]), int(channel_id))]["roles"].add(int(role_id))
+                for (match_id, channel_id), candidate in destinations.items():
+                    if await self.store.has_announced(match_id, guild.id):
+                        continue
+                    channel = guild.get_channel(channel_id)
+                    if channel is None:
+                        logger.warning("Configured channel is unavailable in %s", guild.name)
+                        continue
+                    role_mention = " ".join(f"<@&{role_id}>" for role_id in sorted(candidate["roles"]))
+                    role_mention = f"{role_mention} " if role_mention else ""
+                    match = candidate["match"]
                     timestamp = kickoff_unix(match)
                     message = await channel.send(
-                        f"{role_mention}{team_name} match incoming: **{event_name(match)}**\n"
+                        f"{role_mention}{', '.join(candidate['teams'])} match incoming: **{event_name(match)}**\n"
                         f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                     )
                     await self.store.mark_announced(str(match["id"]), guild.id)

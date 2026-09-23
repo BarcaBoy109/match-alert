@@ -16,6 +16,9 @@ create table if not exists public.guild_teams (
   primary key (guild_id, team_id)
 );
 
+alter table public.guild_teams add column if not exists channel_id bigint;
+alter table public.guild_teams add column if not exists role_id bigint;
+
 insert into public.guild_teams (guild_id, team_id, team_name)
 select guild_id, team_id, team_name
 from public.guild_settings

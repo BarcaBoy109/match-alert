@@ -20,3 +20,10 @@
 ## Next
 
 Iteration 3: add durable lifecycle snapshots and additive database schema support.
+
+## Iteration 5 — complete
+
+- Added JSON/PostgreSQL nullable per-team channel and role overrides, independent reset behavior, inheritance, and `/resetalerts`.
+- Extended `/setchannel` and `/setrole` with optional monitored-team overrides and routed ordinary alerts by destination.
+- Checks: full existing unittest suite — 6 passed; `git diff --check` passed.
+- Remaining: Discord permission validation and complete status-transition delivery reconciliation require iteration 6.
