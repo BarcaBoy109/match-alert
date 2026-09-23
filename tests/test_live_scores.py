@@ -193,6 +193,14 @@ class RoutingTests(unittest.TestCase):
         grouped = bot.group_alert_destinations(1, {"channel_id": 10}, [("A", "a"), ("B", "b")], {"a": {"channel_id": 11}, "b": {"channel_id": 12}}, {"a": self.match(), "b": self.match()})
         self.assertEqual({key[2] for key in grouped}, {11, 12})
 
+    def test_retry_state_keeps_failed_destination_pending(self):
+        grouped = {
+            (1, "m1", 11): {},
+            (1, "m1", 12): {},
+        }
+        pending = bot.pending_destination_keys(grouped, [{"guild_id": 1, "event_id": "m1", "channel_id": 11}])
+        self.assertEqual(pending, [(1, "m1", 12)])
+
 
 class ResultFormattingTests(unittest.TestCase):
     def test_missing_scores_are_not_invented(self):

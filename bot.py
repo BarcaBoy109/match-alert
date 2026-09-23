@@ -1061,6 +1061,12 @@ def group_alert_destinations(guild_id: int, guild_state: dict, teams: list[tuple
     return grouped
 
 
+def pending_destination_keys(grouped: dict[tuple[int, str, int], dict], deliveries: list[dict]) -> list[tuple[int, str, int]]:
+    """Return only destination keys without a successful saved delivery."""
+    delivered = {(int(item["guild_id"]), str(item["event_id"]), int(item["channel_id"])) for item in deliveries}
+    return [key for key in grouped if key not in delivered]
+
+
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
 @app_commands.autocomplete(team=team_autocomplete)
