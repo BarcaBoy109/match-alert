@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from datetime import datetime, timezone
 
 import bot
 from teams import find_competition, find_team
@@ -143,3 +145,20 @@ class AutocompleteTests(unittest.TestCase):
     def test_exact_match_precedes_prefix_match(self):
         choices = bot.team_suggestions("Japan")
         self.assertEqual(choices[0][0], "Japan")
+
+
+class JsonPersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_lifecycle_and_delivery_round_trip(self):
+        original_file = bot.STATE_FILE
+        with tempfile.TemporaryDirectory() as directory:
+            bot.STATE_FILE = bot.Path(directory) / "state.json"
+            try:
+                store = bot.StateStore()
+                snapshot = {"kickoff": "2026-09-24T10:00:00+00:00", "status": "upcoming", "team_ids": ["83"], "observed_at": "2026-09-23T00:00:00+00:00"}
+                await store.save_lifecycle(1, "event-1", snapshot)
+                await store.save_delivery(1, "event-1", 20, 30, datetime.now(timezone.utc))
+                restarted = bot.StateStore()
+                self.assertEqual((await restarted.get_lifecycle(1, "event-1"))["kickoff"], snapshot["kickoff"])
+                self.assertEqual((await restarted.get_deliveries(1, "event-1"))[0]["channel_id"], 20)
+            finally:
+                bot.STATE_FILE = original_file

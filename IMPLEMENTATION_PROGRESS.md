@@ -37,6 +37,7 @@ Final verification remains open pending those scenarios.
 
 Latest progress: added a pure lifecycle transition classifier and regression coverage for equivalent timezones, kickoff changes, and exceptional status precedence. The suite now has 9 passing tests.
 Added transition notice formatting with old/new Discord timestamps; suite now has 10 passing tests.
+Added isolated JSON restart coverage for lifecycle snapshots and per-destination deliveries; suite now has 14 passing tests.
 Deleted active reminders now attempt one replacement in their original saved channel, with a fresh retention deadline and lifecycle snapshot.
 Added additive `alert_deliveries` storage for independent per-guild/event/channel delivery records, with legacy announcement migration and JSON/PostgreSQL store methods.
 Ordinary delivery checks now deduplicate by destination channel and isolate Discord send failures so later destinations can still be attempted and failed channels retry on a later poll.
