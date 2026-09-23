@@ -1125,17 +1125,10 @@ class MatchAlertBot(commands.Bot):
         self.tree.add_command(results_command)
         self.tree.add_command(configure_command)
         self._commands_synced = False
-        self.health_runner: web.AppRunner | None = None
 
     async def setup_hook(self) -> None:
-        """Connect storage, start health serving, and sync Discord commands."""
+        """Connect storage and initialize Discord-specific background work."""
         await self.store.connect()
-        app = web.Application()
-        app.router.add_get("/", health)
-        app.router.add_get("/health", health)
-        self.health_runner = web.AppRunner(app)
-        await self.health_runner.setup()
-        await web.TCPSite(self.health_runner, "0.0.0.0", PORT).start()
         await self.tree.sync()
         self.poll_schedule.start()
 
@@ -1305,5 +1298,52 @@ class MatchAlertBot(commands.Bot):
         await self.wait_until_ready()
 
 
+async def start_health_server() -> web.AppRunner:
+    """Start health checks before attempting the Discord login."""
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    return runner
+
+
+def retry_after_seconds(error: discord.HTTPException, fallback: float) -> float:
+    """Use Discord's requested delay when it is available and valid."""
+    try:
+        requested = float(error.response.headers.get("Retry-After", "0"))
+    except (AttributeError, TypeError, ValueError):
+        requested = 0.0
+    return max(fallback, requested)
+
+
+async def run_bot() -> None:
+    """Keep the web service alive and back off safely from Discord login limits."""
+    health_runner = await start_health_server()
+    backoff_seconds = 300.0
+    try:
+        while True:
+            bot = MatchAlertBot()
+            try:
+                await bot.start(DISCORD_TOKEN)
+                return
+            except discord.HTTPException as error:
+                if error.status != 429:
+                    raise
+                delay = retry_after_seconds(error, backoff_seconds)
+                logger.warning(
+                    "Discord rate-limited the login; retrying in %.0f seconds without restarting the service.",
+                    delay,
+                )
+                backoff_seconds = min(backoff_seconds * 2, 3600.0)
+                await asyncio.sleep(delay)
+            finally:
+                if not bot.is_closed():
+                    await bot.close()
+    finally:
+        await health_runner.cleanup()
+
+
 if __name__ == "__main__":
-    MatchAlertBot().run(DISCORD_TOKEN)
+    asyncio.run(run_bot())
