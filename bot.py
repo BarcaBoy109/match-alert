@@ -459,9 +459,13 @@ def kickoff_unix(event: dict) -> int:
 
 def event_name(event: dict) -> str:
     """Format the home and away team names from an ESPN event."""
-    competition = event["competitions"][0]
-    competitors = competition["competitors"]
-    names = {item["homeAway"]: item["team"]["displayName"] for item in competitors}
+    competition = (event.get("competitions") or [{}])[0]
+    competitors = competition.get("competitors", [])
+    names = {
+        item.get("homeAway"): item.get("team", {}).get("displayName", "opponent")
+        for item in competitors
+        if item.get("homeAway")
+    }
     return f"{names.get('home', DEFAULT_TEAM_NAME)} vs {names.get('away', 'opponent')}"
 
 
