@@ -37,6 +37,22 @@ alter table public.announced_matches add column if not exists channel_id bigint;
 alter table public.announced_matches add column if not exists message_id bigint;
 alter table public.announced_matches add column if not exists delete_after timestamptz;
 
+create table if not exists public.alert_deliveries (
+  guild_id bigint not null,
+  event_id text not null,
+  channel_id bigint not null,
+  message_id bigint,
+  delivered_at timestamptz not null default now(),
+  delete_after timestamptz,
+  primary key (guild_id, event_id, channel_id)
+);
+
+insert into public.alert_deliveries (guild_id, event_id, channel_id, message_id, delete_after)
+select split_part(match_id, ':', 1)::bigint, split_part(match_id, ':', 2), channel_id, message_id, delete_after
+from public.announced_matches
+where channel_id is not null
+on conflict (guild_id, event_id, channel_id) do nothing;
+
 create table if not exists public.match_lifecycle (
   guild_id bigint not null,
   event_id text not null,

@@ -409,6 +409,29 @@ class StateStore:
             if reminder.get("channel_id") and reminder.get("message_id")
         ]
 
+    async def save_delivery(self, guild_id: int, event_id: str, channel_id: int, message_id: int, delete_after: datetime) -> None:
+        """Save one destination delivery independently of other destinations."""
+        if self.pool:
+            await self.pool.execute(
+                """INSERT INTO alert_deliveries (guild_id,event_id,channel_id,message_id,delete_after)
+                VALUES ($1,$2,$3,$4,$5) ON CONFLICT (guild_id,event_id,channel_id) DO UPDATE SET
+                message_id=EXCLUDED.message_id, delete_after=EXCLUDED.delete_after""",
+                guild_id, str(event_id), channel_id, message_id, delete_after,
+            )
+            return
+        deliveries = self.local_state.setdefault("alert_deliveries", [])
+        existing = next((item for item in deliveries if item.get("guild_id") == guild_id and item.get("event_id") == str(event_id) and item.get("channel_id") == channel_id), None)
+        record = {"guild_id": guild_id, "event_id": str(event_id), "channel_id": channel_id, "message_id": message_id, "delete_after": delete_after.isoformat()}
+        if existing: existing.update(record)
+        else: deliveries.append(record)
+        save_state(self.local_state)
+
+    async def get_deliveries(self, guild_id: int, event_id: str) -> list[dict]:
+        if self.pool:
+            rows = await self.pool.fetch("SELECT * FROM alert_deliveries WHERE guild_id=$1 AND event_id=$2", guild_id, str(event_id))
+            return [dict(row) for row in rows]
+        return [item for item in self.local_state.get("alert_deliveries", []) if item.get("guild_id") == guild_id and item.get("event_id") == str(event_id)]
+
     async def clear_reminder(self, announced_id: str) -> None:
         """Clear reminder metadata while retaining duplicate-alert history."""
         if self.pool:
@@ -1157,6 +1180,7 @@ class MatchAlertBot(commands.Bot):
                     await self.store.save_reminder(
                         match_id, int(guild_id), channel.id, replacement.id, delete_after
                     )
+                    await self.store.save_delivery(int(guild_id), match_id, channel.id, replacement.id, delete_after)
                     await self.store.save_lifecycle(int(guild_id), match_id, lifecycle_snapshot(event))
                 except discord.HTTPException:
                     logger.exception("Failed to replace deleted reminder %s", match_id)
@@ -1225,6 +1249,7 @@ class MatchAlertBot(commands.Bot):
                     await self.store.save_reminder(
                         str(match["id"]), guild.id, channel.id, message.id, delete_after
                     )
+                    await self.store.save_delivery(guild.id, str(match["id"]), channel.id, message.id, delete_after)
                     logger.info("Announced %s in %s", event_name(match), guild.name)
         except Exception:
             logger.exception("Schedule poll failed")
