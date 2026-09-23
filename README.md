@@ -90,3 +90,5 @@ The bot requires a long-running process for Discord's Gateway connection. Railwa
 4. Deploy the repository and set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `POLL_MINUTES` in the host's environment settings.
 
 Supabase stores server settings, announced fixtures, and reminder message IDs when `DATABASE_URL` is configured; local `state.json` is not used for those records. The bot needs permission to view and delete messages in the alert channel.
+
+To upgrade an existing non-production database, review and apply `supabase/schema.sql` with that database's normal migration tool. The script is additive and repeatable: it adds team routing columns, lifecycle tracking, and `alert_deliveries`, then copies legacy announcements with known channels into per-destination delivery rows. Verify the resulting tables and indexes before starting the bot. Do not run this against production without a backup and change approval.

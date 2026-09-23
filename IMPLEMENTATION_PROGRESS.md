@@ -34,6 +34,7 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 - The required cross-feature fake integration scenarios and full transition reconciliation are not yet complete; no final release commit is claimed.
 
 Final verification remains open pending those scenarios.
+Migration instructions now describe the additive schema upgrade and legacy delivery backfill; execution remains unverified because local PostgreSQL authentication is unavailable.
 
 Latest progress: added a pure lifecycle transition classifier and regression coverage for equivalent timezones, kickoff changes, and exceptional status precedence. The suite now has 9 passing tests.
 Added transition notice formatting with old/new Discord timestamps; suite now has 10 passing tests.
