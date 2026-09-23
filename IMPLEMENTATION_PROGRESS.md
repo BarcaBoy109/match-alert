@@ -27,3 +27,14 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 - Extended `/setchannel` and `/setrole` with optional monitored-team overrides and routed ordinary alerts by destination.
 - Checks: full existing unittest suite — 6 passed; `git diff --check` passed.
 - Remaining: Discord permission validation and complete status-transition delivery reconciliation require iteration 6.
+
+## Iteration 6 — partial checkpoint
+
+- Ordinary alert candidates are grouped by guild, event, and effective destination channel; role mentions are deduplicated and inherited/overridden routes are respected.
+- Known limitation: delivery records remain in the legacy single-row announced-match model, so transition replacement delivery and partial-failure retry are not complete.
+
+## Iteration 7 — complete
+
+- Added reusable local team/alias suggestions with exact, prefix, substring ranking, canonical deduplication, deterministic ordering, and 25-choice bounding.
+- Registered team autocomplete on all team-bearing commands, including `/results` and `/resetalerts`.
+- Checks: full existing unittest suite — 6 passed; `git diff --check` passed.

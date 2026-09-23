@@ -491,7 +491,7 @@ def team_suggestions(query: str) -> list[tuple[str, str]]:
         candidates.setdefault(team_id, (display, key, 0 if key == needle else 1 if key.startswith(needle) else 2))
     for alias, key in ALIASES.items():
         selected = TEAMS.get(key)
-        if selected and alias == needle or selected and (alias.startswith(needle) or needle in alias):
+        if selected and (alias == needle or alias.startswith(needle) or needle in alias):
             display, team_id = selected
             rank = 0 if alias == needle else 1 if alias.startswith(needle) else 2
             current = candidates.get(team_id)
@@ -960,6 +960,7 @@ def format_result(event: dict) -> str:
 
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
+@app_commands.autocomplete(team=team_autocomplete)
 async def results_command(interaction: discord.Interaction, team: str | None = None, limit: app_commands.Range[int, 1, 10] = 5) -> None:
     await interaction.response.defer(ephemeral=True)
     if interaction.guild_id is None and team is None:
