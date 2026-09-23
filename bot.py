@@ -1215,7 +1215,8 @@ class MatchAlertBot(commands.Bot):
                     timestamp = kickoff_unix(match)
                     message = await channel.send(
                         f"{role_mention}{', '.join(candidate['teams'])} match incoming: **{event_name(match)}**\n"
-                        f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
+                        f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)",
+                        allowed_mentions=discord.AllowedMentions(roles=True),
                     )
                     await self.store.mark_announced(str(match["id"]), guild.id)
                     delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
