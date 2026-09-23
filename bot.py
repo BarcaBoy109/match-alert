@@ -1041,6 +1041,26 @@ def lifecycle_notice(previous: dict | None, event: dict) -> str | None:
     return None
 
 
+def group_alert_destinations(guild_id: int, guild_state: dict, teams: list[tuple[str, str]], team_routes: dict[str, dict], matches: dict[str, dict]) -> dict[tuple[int, str, int], dict]:
+    """Group monitored teams by guild, event, and effective channel."""
+    grouped = {}
+    for team_name, team_id in teams:
+        match = matches.get(team_id)
+        if not match or exceptional_status(match):
+            continue
+        route = team_routes.get(team_id, {})
+        channel_id = route.get("channel_id") or guild_state.get("channel_id")
+        if not channel_id:
+            continue
+        key = (guild_id, str(match["id"]), int(channel_id))
+        item = grouped.setdefault(key, {"match": match, "teams": [], "roles": set()})
+        item["teams"].append(team_name)
+        role_id = route.get("role_id") or guild_state.get("role_id")
+        if role_id:
+            item["roles"].add(int(role_id))
+    return grouped
+
+
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
 @app_commands.autocomplete(team=team_autocomplete)

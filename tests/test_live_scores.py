@@ -162,3 +162,18 @@ class JsonPersistenceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await restarted.get_deliveries(1, "event-1"))[0]["channel_id"], 20)
             finally:
                 bot.STATE_FILE = original_file
+
+
+class RoutingTests(unittest.TestCase):
+    def match(self, event_id="m1"):
+        return {"id": event_id, "date": "2026-09-24T10:00:00Z", "status": {"type": {"state": "pre"}}, "competitions": [{"competitors": []}]}
+
+    def test_same_channel_combines_teams_and_roles(self):
+        grouped = bot.group_alert_destinations(1, {"channel_id": 10, "role_id": 20}, [("A", "a"), ("B", "b")], {"a": {}, "b": {"role_id": 21}}, {"a": self.match(), "b": self.match()})
+        item = next(iter(grouped.values()))
+        self.assertEqual(item["teams"], ["A", "B"])
+        self.assertEqual(item["roles"], {20, 21})
+
+    def test_different_overridden_channels_are_separate(self):
+        grouped = bot.group_alert_destinations(1, {"channel_id": 10}, [("A", "a"), ("B", "b")], {"a": {"channel_id": 11}, "b": {"channel_id": 12}}, {"a": self.match(), "b": self.match()})
+        self.assertEqual({key[2] for key in grouped}, {11, 12})
