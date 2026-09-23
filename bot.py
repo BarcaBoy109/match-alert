@@ -1130,7 +1130,12 @@ class MatchAlertBot(commands.Bot):
                 destinations = {}
                 for team_name, team_id in teams:
                     match = matches[team_id]
-                    if not match or exceptional_status(match):
+                    if not match:
+                        continue
+                    await self.store.save_lifecycle(
+                        guild.id, str(match["id"]), lifecycle_snapshot(match, [team_id])
+                    )
+                    if exceptional_status(match):
                         continue
                     route = await self.store.get_team_settings(guild.id, team_id)
                     channel_id = route.get("channel_id") or guild_state.get("channel_id")
@@ -1156,9 +1161,6 @@ class MatchAlertBot(commands.Bot):
                         f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                     )
                     await self.store.mark_announced(str(match["id"]), guild.id)
-                    await self.store.save_lifecycle(
-                        guild.id, str(match["id"]), lifecycle_snapshot(match, [team_id for _, team_id in teams if event_has_team(match, team_id)])
-                    )
                     delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
                         hours=REMINDER_RETENTION_HOURS
                     )
