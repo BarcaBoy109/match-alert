@@ -31,6 +31,8 @@ Iteration 3: add durable lifecycle snapshots and additive database schema suppor
 
 - Documentation was updated for results, routing inheritance, reset behavior, status labels, and additive schema application.
 - The required cross-feature fake integration scenarios and full transition reconciliation are not yet complete; no final release commit is claimed.
+
+Final verification remains open pending those scenarios.
 - Remaining: Discord permission validation and complete status-transition delivery reconciliation require iteration 6.
 
 ## Iteration 6 — partial checkpoint
