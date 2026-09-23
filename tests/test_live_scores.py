@@ -192,3 +192,21 @@ class RoutingTests(unittest.TestCase):
     def test_different_overridden_channels_are_separate(self):
         grouped = bot.group_alert_destinations(1, {"channel_id": 10}, [("A", "a"), ("B", "b")], {"a": {"channel_id": 11}, "b": {"channel_id": 12}}, {"a": self.match(), "b": self.match()})
         self.assertEqual({key[2] for key in grouped}, {11, 12})
+
+
+class ResultFormattingTests(unittest.TestCase):
+    def test_missing_scores_are_not_invented(self):
+        event = {
+            "id": "r1", "date": "2026-09-24T10:00:00Z",
+            "status": {"type": {"state": "post", "completed": True}},
+            "competitions": [{"competitors": [
+                {"homeAway": "home", "team": {"displayName": "A"}},
+                {"homeAway": "away", "team": {"displayName": "B"}},
+            ]}],
+        }
+        self.assertEqual(bot.event_score(event), "?–?")
+        self.assertFalse(bot.event_score_has_values(event))
+
+    def test_abandoned_event_is_not_a_recent_result(self):
+        event = {"status": {"type": {"state": "post", "completed": True, "detail": "Abandoned"}}, "competitions": [{}]}
+        self.assertNotEqual(bot.event_phase(event), "final")
