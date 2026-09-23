@@ -958,6 +958,22 @@ def format_result(event: dict) -> str:
     return f"**{event_name(event)}** — **{event_score(event)}** (<t:{timestamp}:d>)"
 
 
+def lifecycle_snapshot(event: dict, team_ids: list[str] | None = None) -> dict:
+    """Build a JSON/Postgres-friendly observation record for one ESPN event."""
+    kickoff = None
+    try:
+        kickoff = datetime.fromisoformat(event["date"].replace("Z", "+00:00")).astimezone(timezone.utc).isoformat()
+    except (KeyError, TypeError, ValueError):
+        pass
+    return {
+        "event_id": str(event.get("id", "")),
+        "kickoff": kickoff,
+        "status": event_phase(event),
+        "team_ids": [str(team_id) for team_id in (team_ids or [])],
+        "observed_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app_commands.command(name="results", description="Show a team's completed matches from the last 30 days.")
 @app_commands.describe(team="Optional supported team or alias", limit="Number of results, from 1 to 10")
 @app_commands.autocomplete(team=team_autocomplete)
@@ -1097,8 +1113,8 @@ class MatchAlertBot(commands.Bot):
         """Poll each guild's configured teams and send new match alerts."""
         try:
             try:
-                await self.cleanup_reminders()
                 await self.update_live_reminders()
+                await self.cleanup_reminders()
             except Exception:
                 logger.exception("Reminder maintenance failed")
             guild_configs = []
@@ -1140,6 +1156,9 @@ class MatchAlertBot(commands.Bot):
                         f"Kickoff: <t:{timestamp}:f> (<t:{timestamp}:R>)"
                     )
                     await self.store.mark_announced(str(match["id"]), guild.id)
+                    await self.store.save_lifecycle(
+                        guild.id, str(match["id"]), lifecycle_snapshot(match, [team_id for _, team_id in teams if event_has_team(match, team_id)])
+                    )
                     delete_after = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(
                         hours=REMINDER_RETENTION_HOURS
                     )

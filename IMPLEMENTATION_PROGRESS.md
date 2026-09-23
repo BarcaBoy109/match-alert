@@ -16,6 +16,7 @@
 
 - Exceptional ESPN statuses now take precedence over `state=post` in shared status formatting.
 - Full poll reconciliation, replacement delivery, and retention-deadline handling remain unimplemented.
+- Maintenance now updates live reminders before cleanup, and ordinary announcements persist lifecycle snapshots.
 
 ## Next
 
