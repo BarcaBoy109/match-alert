@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 import bot
 from teams import find_competition, find_team
@@ -177,6 +178,42 @@ class JsonPersistenceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await restarted.get_deliveries(1, "event-1"))[0]["channel_id"], 20)
             finally:
                 bot.STATE_FILE = original_file
+
+
+class PostgresLifecyclePersistenceTests(unittest.IsolatedAsyncioTestCase):
+    async def test_iso_timestamps_are_bound_as_aware_datetimes(self):
+        store = bot.StateStore()
+        store.pool = AsyncMock()
+        snapshot = {
+            "kickoff": "2026-09-24T10:00:00+00:00",
+            "status": "upcoming",
+            "team_ids": ["83"],
+            "observed_at": "2026-09-23T00:00:00+00:00",
+        }
+
+        await store.save_lifecycle(1, "event-1", snapshot)
+
+        args = store.pool.execute.await_args.args
+        self.assertEqual(args[1:3], (1, "event-1"))
+        self.assertEqual(args[3], datetime(2026, 9, 24, 10, tzinfo=timezone.utc))
+        self.assertEqual(args[6], datetime(2026, 9, 23, tzinfo=timezone.utc))
+
+    async def test_database_datetimes_are_normalized_for_lifecycle_comparison(self):
+        store = bot.StateStore()
+        store.pool = AsyncMock()
+        store.pool.fetchrow.return_value = {
+            "guild_id": 1,
+            "event_id": "event-1",
+            "kickoff": datetime(2026, 9, 24, 10, tzinfo=timezone.utc),
+            "status": "upcoming",
+            "team_ids": ["83"],
+            "observed_at": datetime(2026, 9, 23, tzinfo=timezone.utc),
+        }
+
+        snapshot = await store.get_lifecycle(1, "event-1")
+
+        self.assertEqual(snapshot["kickoff"], "2026-09-24T10:00:00+00:00")
+        self.assertEqual(snapshot["observed_at"], "2026-09-23T00:00:00+00:00")
 
 
 class RoutingTests(unittest.TestCase):

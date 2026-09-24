@@ -41,6 +41,24 @@ SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/score
 COMPETITION_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{competition}/scoreboard"
 
 
+def postgres_datetime(value: datetime | str | None) -> datetime | None:
+    """Convert JSON-friendly ISO timestamps to asyncpg timestamptz values."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def json_datetime(value: datetime | str | None) -> str | None:
+    """Normalize asyncpg timestamptz values to the lifecycle JSON format."""
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    return value
+
+
 def load_state() -> dict:
     """Load persisted local state, returning an empty state if unavailable."""
     if not STATE_FILE.exists():
@@ -175,7 +193,9 @@ class StateStore:
                 VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (guild_id, event_id) DO UPDATE SET kickoff=EXCLUDED.kickoff,
                 status=EXCLUDED.status, team_ids=EXCLUDED.team_ids, observed_at=EXCLUDED.observed_at""",
-                guild_id, event_id, snapshot.get("kickoff"), snapshot.get("status"), snapshot.get("team_ids", []), snapshot.get("observed_at"),
+                guild_id, event_id, postgres_datetime(snapshot.get("kickoff")),
+                snapshot.get("status"), snapshot.get("team_ids", []),
+                postgres_datetime(snapshot.get("observed_at")),
             )
             return
         self.local_state.setdefault("match_lifecycle", {})[f"{guild_id}:{event_id}"] = snapshot
@@ -184,7 +204,12 @@ class StateStore:
     async def get_lifecycle(self, guild_id: int, event_id: str) -> dict | None:
         if self.pool:
             row = await self.pool.fetchrow("SELECT * FROM match_lifecycle WHERE guild_id=$1 AND event_id=$2", guild_id, event_id)
-            return dict(row) if row else None
+            if not row:
+                return None
+            snapshot = dict(row)
+            snapshot["kickoff"] = json_datetime(snapshot.get("kickoff"))
+            snapshot["observed_at"] = json_datetime(snapshot.get("observed_at"))
+            return snapshot
         return self.local_state.get("match_lifecycle", {}).get(f"{guild_id}:{event_id}")
 
     async def set_guild_favourite(self, guild_id: int, team_name: str, team_id: str) -> None:
