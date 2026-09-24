@@ -16,7 +16,14 @@ from discord import app_commands
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 
-from teams import ALIASES, TEAMS, find_competition, find_team
+from teams import (
+    ALIASES,
+    COMPETITIONS,
+    COMPETITION_ALIASES,
+    TEAMS,
+    find_competition,
+    find_team,
+)
 
 load_dotenv()
 
@@ -563,6 +570,37 @@ async def team_autocomplete(interaction: discord.Interaction, current: str) -> l
     return [app_commands.Choice(name=name[:100], value=value[:100]) for name, value in team_suggestions(current)]
 
 
+def competition_suggestions(query: str) -> list[tuple[str, str]]:
+    """Return deterministic local autocomplete choices for competitions."""
+    needle = normalize_team_query(query)
+    candidates = {}
+    for key, (display, competition_code) in COMPETITIONS.items():
+        if needle and needle not in key:
+            continue
+        rank = 0 if key == needle else 1 if key.startswith(needle) else 2
+        candidates.setdefault(competition_code, (display, key, rank))
+    for alias, key in COMPETITION_ALIASES.items():
+        selected = COMPETITIONS.get(key)
+        if selected and (alias == needle or alias.startswith(needle) or needle in alias):
+            display, competition_code = selected
+            rank = 0 if alias == needle else 1 if alias.startswith(needle) else 2
+            current = candidates.get(competition_code)
+            if current is None or rank < current[2]:
+                candidates[competition_code] = (display, key, rank)
+    return [
+        (display, key)
+        for display, key, _rank in sorted(
+            candidates.values(), key=lambda item: (item[2], item[0].casefold())
+        )
+    ][:25]
+
+
+async def competition_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    return [app_commands.Choice(name=name[:100], value=value[:100]) for name, value in competition_suggestions(current)]
+
+
 def event_score(event: dict) -> str:
     """Format the current home and away score from an ESPN event."""
     competitors = event.get("competitions", [{}])[0].get("competitors", [])
@@ -808,7 +846,7 @@ async def help_command(interaction: discord.Interaction) -> None:
     team="Optional team name, for example Real Madrid or Japan",
     competition="Optional competition name, for example Premier League",
 )
-@app_commands.autocomplete(team=team_autocomplete)
+@app_commands.autocomplete(team=team_autocomplete, competition=competition_autocomplete)
 async def nextmatch_command(
     interaction: discord.Interaction,
     team: str | None = None,

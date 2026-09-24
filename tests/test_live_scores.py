@@ -100,6 +100,10 @@ class CompetitionTests(unittest.TestCase):
         self.assertEqual(find_competition("UEL"), ("UEFA Europa League", "uefa.europa"))
         self.assertEqual(find_competition("UECL"), ("UEFA Conference League", "uefa.europa.conf"))
 
+    def test_competition_suggestions_include_canonical_names_and_aliases(self):
+        self.assertEqual(bot.competition_suggestions("premier"), [("Premier League", "premier league")])
+        self.assertEqual(bot.competition_suggestions("ucl"), [("UEFA Champions League", "uefa champions league")])
+
 
 class LifecycleTests(unittest.TestCase):
     def event(self, date, detail=None):
@@ -258,6 +262,9 @@ class ResultFormattingTests(unittest.TestCase):
 
 
 class CommandRegistrationTests(unittest.TestCase):
+    def test_nextmatch_has_competition_autocomplete(self):
+        self.assertIsNotNone(bot.nextmatch_command._params["competition"].autocomplete)
+
     def test_all_team_commands_have_autocomplete(self):
         commands = (
             bot.configure_command, bot.addteam_command, bot.removeteam_command,
