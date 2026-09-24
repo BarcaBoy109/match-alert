@@ -1322,15 +1322,16 @@ class MatchAlertBot(commands.Bot):
             self._command_sync_task = asyncio.create_task(self.sync_legacy_guild_commands())
 
     async def sync_legacy_guild_commands(self) -> None:
-        """Update existing guild registrations, without creating new duplicates."""
+        """Remove old guild-scoped registrations so global commands are unique."""
         for guild in self.guilds:
             while not self.is_closed():
                 try:
                     await self.cooldown.wait()
                     existing = await self.tree.fetch_commands(guild=guild)
                     if existing:
-                        self.tree.copy_global_to(guild=guild)
-                        await sync_commands_if_changed(self.tree, guild=guild, existing=existing)
+                        self.tree.clear_commands(guild=guild)
+                        await self.tree.sync(guild=guild)
+                        logger.info("Removed legacy guild commands from guild %s", guild.id)
                     break
                 except discord.HTTPException as error:
                     if error.status != 429:

@@ -165,15 +165,17 @@ class CommandSyncTests(unittest.IsolatedAsyncioTestCase):
                 sync.assert_not_awaited()
                 self.assertTrue(self.client._commands_synced)
 
-    async def test_legacy_guild_commands_are_updated_when_changed(self):
+    async def test_existing_legacy_guild_commands_are_removed(self):
         guild = SimpleNamespace(id=1)
         self.client._connection._guilds = {1: guild}
         remote = self.remote()
         remote.pop()
         with patch.object(self.tree, "fetch_commands", AsyncMock(return_value=remote)):
-            with patch.object(self.tree, "sync", AsyncMock()) as sync:
-                await self.client.sync_legacy_guild_commands()
-                sync.assert_awaited_once_with(guild=guild)
+            with patch.object(self.tree, "clear_commands") as clear:
+                with patch.object(self.tree, "sync", AsyncMock()) as sync:
+                    await self.client.sync_legacy_guild_commands()
+                    clear.assert_called_once_with(guild=guild)
+                    sync.assert_awaited_once_with(guild=guild)
 
     async def test_ready_reconnect_does_not_repeat_guild_sync(self):
         work = AsyncMock()
