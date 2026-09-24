@@ -1,8 +1,11 @@
 import asyncio
 import json
 import logging
+import math
 import os
+import time
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import aiohttp
@@ -26,6 +29,8 @@ DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 DEFAULT_TEAM_ID = os.getenv("DEFAULT_TEAM_ID", os.getenv("TEAM_ID", "83"))
 DEFAULT_TEAM_NAME = os.getenv("DEFAULT_TEAM_NAME", os.getenv("TEAM_NAME", "FC Barcelona"))
 POLL_MINUTES = int(os.getenv("POLL_MINUTES", "10"))
+if POLL_MINUTES <= 0:
+    raise ValueError("POLL_MINUTES must be greater than zero")
 REMINDER_RETENTION_HOURS = float(os.getenv("REMINDER_RETENTION_HOURS", "3"))
 STATE_FILE = Path(os.getenv("STATE_FILE", "state.json"))
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -1104,15 +1109,167 @@ async def results_command(interaction: discord.Interaction, team: str | None = N
         await interaction.edit_original_response(content="I could not fetch results right now. Please try again shortly.")
 
 
+def retry_after_seconds(error: discord.HTTPException, fallback: float) -> float:
+    """Accept seconds or an HTTP date, ignoring invalid and non-finite delays."""
+    value = error.response.headers.get("Retry-After", "0")
+    try:
+        requested = float(value)
+    except (TypeError, ValueError):
+        try:
+            requested = (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+        except (TypeError, ValueError, OverflowError):
+            requested = 0.0
+    return max(fallback, requested) if math.isfinite(requested) else fallback
+
+
+class DiscordCooldown:
+    """Share an IP/global cooldown across clients and their interaction sessions."""
+
+    hosts = {"discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"}
+
+    def __init__(self) -> None:
+        self.until = 0.0
+
+    @property
+    def remaining(self) -> float:
+        return max(0.0, self.until - time.monotonic())
+
+    def defer(self, seconds: float) -> None:
+        # A small margin prevents a retry at the server's exact reset boundary.
+        self.until = max(self.until, time.monotonic() + seconds + 1.0)
+
+    async def wait(self) -> None:
+        while self.remaining > 0:
+            await asyncio.sleep(self.remaining)
+
+    async def request_start(self, session, context, params) -> None:
+        if params.url.host in self.hosts:
+            await self.wait()
+
+    async def request_end(self, session, context, params) -> None:
+        response = params.response
+        if params.url.host not in self.hosts or response.status != 429:
+            return
+        try:
+            data = await response.json(content_type=None)
+        except (ValueError, aiohttp.ClientError):
+            data = None
+        headers = response.headers
+        edge_block = not headers.get("Via") or not isinstance(data, dict)
+        global_limit = (
+            headers.get("X-RateLimit-Global", "").lower() == "true"
+            or headers.get("X-RateLimit-Scope") == "global"
+            or (isinstance(data, dict) and data.get("global") is True)
+        )
+        if not (edge_block or global_limit):
+            return  # discord.py handles ordinary per-route limits itself.
+        fallback = 300.0 if edge_block else 1.0
+        try:
+            body_delay = float(data.get("retry_after", 0)) if isinstance(data, dict) else 0.0
+            if math.isfinite(body_delay):
+                fallback = max(fallback, body_delay)
+        except (TypeError, ValueError):
+            pass
+        error = discord.HTTPException(response, data if isinstance(data, (dict, str)) else "")
+        delay = retry_after_seconds(error, fallback)
+        self.defer(delay)
+        # Never log the URL: interaction/webhook paths contain credentials.
+        logger.warning(
+            "Discord %s block: pausing all Discord HTTP requests for %.0fs "
+            "(scope=%s, retry_after=%s, cf_ray=%s)",
+            "edge/IP" if edge_block else "global", self.remaining,
+            headers.get("X-RateLimit-Scope", "unknown"),
+            headers.get("Retry-After", "absent"), headers.get("CF-Ray", "absent"),
+        )
+
+    def trace_config(self) -> aiohttp.TraceConfig:
+        trace = aiohttp.TraceConfig()
+        trace.on_request_start.append(self.request_start)
+        trace.on_request_end.append(self.request_end)
+        return trace
+
+
+class ServiceStatus:
+    def __init__(self, cooldown: DiscordCooldown) -> None:
+        self.cooldown = cooldown
+        self.bot = None
+
+    def payload(self) -> dict:
+        connected = self.bot is not None and self.bot.is_ready()
+        remaining = self.cooldown.remaining
+        ready = connected and remaining == 0 and self.bot._commands_synced
+        return {
+            "ok": ready, "service": "match-alert", "discord_ready": ready,
+            "discord_connected": connected,
+            "status": "rate_limited" if remaining else "ready" if ready else "connecting",
+            "retry_after_seconds": math.ceil(remaining),
+        }
+
+
+STATUS_KEY = web.AppKey("service_status", ServiceStatus)
+
+
 async def health(request: web.Request) -> web.Response:
-    """Return the lightweight HTTP health-check response."""
-    return web.json_response({"ok": True, "service": "match-alert"})
+    """Readiness for external monitoring; liveness must use /live instead."""
+    payload = request.app[STATUS_KEY].payload()
+    return web.json_response(payload, status=200 if payload["ok"] else 503)
+
+
+async def liveness(request: web.Request) -> web.Response:
+    """Keep the host alive while Discord asks us to wait."""
+    return web.json_response({"ok": True, "service": "match-alert", "alive": True})
+
+
+def command_signature(payload: dict) -> dict:
+    """Normalize Discord's optional defaults without changing option order."""
+    ignored = {"id", "application_id", "guild_id", "version"}
+    def clean(value):
+        if isinstance(value, dict):
+            return {key: clean(item) for key, item in value.items()
+                    if key not in ignored and item is not None and item != [] and item != {}
+                    and item is not False}
+        if isinstance(value, list):
+            return [clean(item) for item in value]
+        return value
+    return clean(payload)
+
+
+async def sync_commands_if_changed(tree, *, guild=None, existing=None) -> None:
+    remote = existing if existing is not None else await tree.fetch_commands(guild=guild)
+    local = tree.get_commands(guild=guild)
+    desired = {(cmd.name, cmd.type.value if isinstance(cmd, app_commands.ContextMenu) else 1): cmd.to_dict(tree)
+               for cmd in local}
+    actual = {}
+    for cmd in remote:
+        data = cmd.to_dict()
+        data.update(nsfw=cmd.nsfw, dm_permission=cmd.dm_permission,
+                    default_member_permissions=cmd.default_member_permissions.value
+                    if cmd.default_member_permissions is not None else None)
+        key = (cmd.name, cmd.type.value)
+        # An unspecified context/install policy inherits Discord's defaults.
+        for field in ("contexts", "integration_types"):
+            if desired.get(key, {}).get(field) is None:
+                data.pop(field, None)
+        actual[key] = data
+    if {key: command_signature(value) for key, value in desired.items()} != {
+        key: command_signature(value) for key, value in actual.items()
+    }:
+        await tree.sync(guild=guild)
+        logger.info("Updated slash commands for %s", f"guild {guild.id}" if guild else "global scope")
 
 
 class MatchAlertBot(commands.Bot):
-    def __init__(self) -> None:
+    def __init__(self, cooldown: DiscordCooldown | None = None) -> None:
+        self.cooldown = cooldown if cooldown is not None else DiscordCooldown()
         intents = discord.Intents.default()
-        super().__init__(command_prefix="!", intents=intents)
+        # This bot exposes application (slash) commands only. Using the
+        # mention-only sentinel avoids enabling Discord's privileged message
+        # content intent for an unused text-command prefix.
+        super().__init__(
+            command_prefix=commands.when_mentioned,
+            intents=intents,
+            http_trace=self.cooldown.trace_config(),
+        )
         self.store = StateStore()
         self.tree.add_command(setchannel_command)
         self.tree.add_command(setrole_command)
@@ -1125,22 +1282,58 @@ class MatchAlertBot(commands.Bot):
         self.tree.add_command(results_command)
         self.tree.add_command(configure_command)
         self._commands_synced = False
+        self._command_sync_task: asyncio.Task | None = None
 
     async def setup_hook(self) -> None:
         """Connect storage and initialize Discord-specific background work."""
         await self.store.connect()
-        await self.tree.sync()
+        await sync_commands_if_changed(self.tree)
         self.poll_schedule.start()
 
     async def on_ready(self) -> None:
         """Log readiness and synchronize commands for joined guilds."""
         logger.info("Logged in as %s", self.user)
-        if not self._commands_synced:
-            for guild in self.guilds:
-                self.tree.copy_global_to(guild=guild)
-                await self.tree.sync(guild=guild)
+        if self._command_sync_task is None:
+            self._command_sync_task = asyncio.create_task(self.sync_legacy_guild_commands())
+
+    async def sync_legacy_guild_commands(self) -> None:
+        """Update existing guild registrations, without creating new duplicates."""
+        for guild in self.guilds:
+            while not self.is_closed():
+                try:
+                    await self.cooldown.wait()
+                    existing = await self.tree.fetch_commands(guild=guild)
+                    if existing:
+                        self.tree.copy_global_to(guild=guild)
+                        await sync_commands_if_changed(self.tree, guild=guild, existing=existing)
+                    break
+                except discord.HTTPException as error:
+                    if error.status != 429:
+                        logger.exception("Could not check slash commands for guild %s", guild.id)
+                        return
+                    self.cooldown.defer(retry_after_seconds(error, 300.0))
+        if not self.is_closed():
             self._commands_synced = True
-            logger.info("Synced slash commands to %d server(s)", len(self.guilds))
+
+    async def close(self) -> None:
+        """Stop owned work and release storage before replacing this client."""
+        pending = [self.poll_schedule.get_task(), self._command_sync_task]
+        for task in pending:
+            if task is not None and task is not asyncio.current_task():
+                task.cancel()
+        await asyncio.gather(
+            *(task for task in pending if task is not None and task is not asyncio.current_task()),
+            return_exceptions=True,
+        )
+        try:
+            await super().close()
+        finally:
+            if self.store.pool is not None:
+                pool, self.store.pool = self.store.pool, None
+                try:
+                    await asyncio.wait_for(pool.close(), timeout=10)
+                except asyncio.TimeoutError:
+                    pool.terminate()
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
         """Welcome a newly joined guild owner with initial setup guidance."""
@@ -1298,33 +1491,38 @@ class MatchAlertBot(commands.Bot):
         await self.wait_until_ready()
 
 
-async def start_health_server() -> web.AppRunner:
+async def start_health_server(status: ServiceStatus) -> web.AppRunner:
     """Start health checks before attempting the Discord login."""
     app = web.Application()
-    app.router.add_get("/", health)
+    app[STATUS_KEY] = status
+    app.router.add_get("/", liveness)
+    app.router.add_get("/live", liveness)
     app.router.add_get("/health", health)
+    app.router.add_get("/ready", health)
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
     return runner
 
 
-def retry_after_seconds(error: discord.HTTPException, fallback: float) -> float:
-    """Use Discord's requested delay when it is available and valid."""
-    try:
-        requested = float(error.response.headers.get("Retry-After", "0"))
-    except (AttributeError, TypeError, ValueError):
-        requested = 0.0
-    return max(fallback, requested)
-
-
 async def run_bot() -> None:
     """Keep the web service alive and back off safely from Discord login limits."""
-    health_runner = await start_health_server()
+    cooldown = DiscordCooldown()
+    not_before = float(os.getenv("DISCORD_NOT_BEFORE", "0"))
+    if not math.isfinite(not_before) or not_before < 0:
+        raise ValueError("DISCORD_NOT_BEFORE must be a finite, non-negative Unix timestamp")
+    startup_delay = not_before - time.time()
+    if startup_delay > 0:
+        cooldown.defer(startup_delay)
+        logger.info("Preserving deployment cooldown; first Discord request in %.0fs", cooldown.remaining)
+    status = ServiceStatus(cooldown)
+    health_runner = await start_health_server(status)
     backoff_seconds = 300.0
     try:
         while True:
-            bot = MatchAlertBot()
+            await cooldown.wait()
+            bot = MatchAlertBot(cooldown)
+            status.bot = bot
             try:
                 await bot.start(DISCORD_TOKEN)
                 return
@@ -1332,15 +1530,15 @@ async def run_bot() -> None:
                 if error.status != 429:
                     raise
                 delay = retry_after_seconds(error, backoff_seconds)
+                cooldown.defer(delay)
                 logger.warning(
-                    "Discord rate-limited the login; retrying in %.0f seconds without restarting the service.",
-                    delay,
+                    "Discord rate-limited startup; retrying in %.0f seconds without restarting the service.",
+                    cooldown.remaining,
                 )
                 backoff_seconds = min(backoff_seconds * 2, 3600.0)
-                await asyncio.sleep(delay)
             finally:
-                if not bot.is_closed():
-                    await bot.close()
+                status.bot = None
+                await bot.close()
     finally:
         await health_runner.cleanup()
 

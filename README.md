@@ -78,6 +78,39 @@ PORT=8080
 
 `REMINDER_RETENTION_HOURS` controls when sent reminders are deleted after kickoff. It defaults to `3`, allowing time for a normal match to finish.
 
+## Deployment health and Discord rate limits
+
+Configure Render's **Health Check Path** as `/live` (or retain its TCP port check).
+Do this before deploying this version if Render currently checks `/health`.
+`/` and `/live` return HTTP 200 while the process is alive, including during a
+Discord cooldown. This prevents the host from restarting the process and making
+another premature login attempt.
+
+Use `/health` or `/ready` for external availability monitoring, such as
+UptimeRobot. They return HTTP 503 while Discord is disconnected, command setup
+is incomplete, or an IP/global cooldown is active. The JSON response includes
+`discord_connected`, `discord_ready`, `status`, and `retry_after_seconds`.
+They return HTTP 200 once the bot is ready. Do not use these readiness endpoints
+as a host restart trigger.
+
+Discord global and edge/IP 429 responses pause subsequent Discord HTTP requests
+across login, reminders, and interaction responses. Ordinary per-route limits
+remain managed by discord.py. Retries honor Discord's delay plus a small safety
+margin; failed startup clients close their background tasks and database pool
+before waiting. Cooldowns survive client recreation in the same process, but
+not a process restart, so avoid manual redeploys during an active cooldown.
+If deployment is necessary during a cooldown, set `DISCORD_NOT_BEFORE` to the
+Unix timestamp of the existing retry deadline before deploying. The new process
+serves health checks immediately but delays its first Discord request until that
+time. A timestamp in the past has no effect and can be removed later.
+Diagnostics log the rate-limit scope, delay, and Cloudflare request identifier
+without logging credential-bearing request URLs.
+
+Startup compares registered slash commands with the current definitions and
+updates them only when changed. Existing per-server command registrations are
+kept up to date for compatibility; new servers use the global commands.
+`POLL_MINUTES` must be a positive integer.
+
 While a saved alert is active, the bot updates its message with the live score and then the final result before deleting it after the retention period. See [`FUTURE_PLAN.md`](FUTURE_PLAN.md) for planned improvements.
 
 ## Supabase and Railway
