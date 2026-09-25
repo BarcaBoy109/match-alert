@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Match Alert keeps your Discord server ahead of kickoff with smart football reminders, live scores, results, and flexible team routing."
+    />
+    <meta name="theme-color" content="#090c0b" />
+    <meta property="og:title" content="Match Alert — Never miss kickoff" />
+    <meta
+      property="og:description"
+      content="Live football alerts, scores, and fixtures—delivered to your Discord server."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://barcaboy109.github.io/match-alert/" />
+    <title>Match Alert — Football alerts for Discord</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" data-header>
+      <nav class="nav shell" aria-label="Main navigation">
+        <a class="brand" href="#top" aria-label="Match Alert home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 36 36" role="img">
+              <path d="M18 2.5 31 10v16L18 33.5 5 26V10Z" fill="currentColor" />
+              <path d="m18 9 3 5.7 6.3.9-4.6 4.5 1.1 6.4-5.8-3-5.8 3 1.1-6.4-4.6-4.5 6.3-.9Z" fill="#090c0b" />
+            </svg>
+          </span>
+          <span>Match Alert</span>
+        </a>
+
+        <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links">
+          <span class="sr-only">Toggle navigation</span>
+          <span></span><span></span>
+        </button>
+
+        <div class="nav-links" id="nav-links">
+          <a href="#features">Features</a>
+          <a href="#commands">Commands</a>
+          <a href="#coverage">Coverage</a>
+          <a class="nav-github" href="https://github.com/BarcaBoy109/match-alert" target="_blank" rel="noreferrer">
+            GitHub
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.75 3.75h7.5v7.5M12 4 4 12" /></svg>
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero shell" id="top">
+        <div class="hero-copy reveal">
+          <div class="eyebrow"><span class="pulse"></span> Live on Discord</div>
+          <h1>Your club.<br /><em>Your server.</em><br />Right on time.</h1>
+          <p class="hero-lede">
+            Match Alert watches the fixtures so your community doesn't have to. Get kickoff reminders,
+            live scores, and final results for every team you follow.
+          </p>
+          <div class="hero-actions">
+            <a
+              class="button button-primary"
+              href="https://discord.com/oauth2/authorize?client_id=1548667872451100682&amp;permissions=19456&amp;integration_type=0&amp;scope=bot%20applications.commands"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Add to Discord
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" /></svg>
+            </a>
+            <a class="button button-ghost" href="#commands">See how it works</a>
+          </div>
+          <div class="trust-row" aria-label="Product highlights">
+            <span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>Free to use</span>
+            <span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>Open source</span>
+            <span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3 3 7-7" /></svg>No clutter</span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal" aria-label="A preview of Match Alert in Discord">
+          <div class="pitch-lines" aria-hidden="true">
+            <span class="pitch-circle"></span>
+            <span class="pitch-line"></span>
+          </div>
+          <div class="match-card">
+            <div class="match-card-top">
+              <div>
+                <span class="card-kicker">UEFA CHAMPIONS LEAGUE</span>
+                <span class="match-state"><i></i> LIVE · 67'</span>
+              </div>
+              <span class="live-pill">LIVE</span>
+            </div>
+            <div class="scoreboard">
+              <div class="team team-home">
+                <span class="team-crest crest-blue">B</span>
+                <span>Barcelona</span>
+              </div>
+              <div class="score">
+                <strong>2 <small>:</small> 1</strong>
+                <span>Second half</span>
+              </div>
+              <div class="team team-away">
+                <span class="team-crest crest-white">A</span>
+                <span>Arsenal</span>
+              </div>
+            </div>
+            <div class="match-meta">
+              <span>Montjuïc Olympic Stadium</span>
+              <span>Today, 20:00</span>
+            </div>
+            <div class="discord-message">
+              <span class="bot-avatar" aria-hidden="true">
+                <svg viewBox="0 0 64 64">
+                  <path d="M32 9 53 21v24L32 57 11 45V21Z" fill="currentColor" />
+                  <path d="m32 19 4.5 8.7 9.6 1.4-6.9 6.8 1.6 9.5-8.8-4.5-8.8 4.5 1.6-9.5-6.9-6.8 9.6-1.4Z" fill="#121614" />
+                </svg>
+              </span>
+              <div>
+                <p><strong>Match Alert</strong><b>APP</b><time> Today at 21:07</time></p>
+                <p>⚽ <strong>GOAL!</strong> Barcelona 2–1 Arsenal</p>
+              </div>
+            </div>
+          </div>
+          <p class="game-disclaimer">This game is fictional and shown for demonstration purposes only.</p>
+          <div class="float-chip chip-top"><span>24h</span> reminder</div>
+          <div class="float-chip chip-bottom"><span>⚽</span> Score updated</div>
+        </div>
+      </section>
+
+      <section class="league-strip" aria-label="Supported competitions">
+        <div class="league-track">
+          <span>Premier League</span><i></i><span>La Liga</span><i></i><span>Bundesliga</span><i></i>
+          <span>Serie A</span><i></i><span>Ligue 1</span><i></i><span>Champions League</span><i></i>
+          <span>MLS</span><i></i><span>Premier League</span><i></i><span>La Liga</span><i></i>
+          <span>Bundesliga</span><i></i><span>Serie A</span><i></i><span>Ligue 1</span><i></i>
+          <span>Champions League</span><i></i><span>MLS</span><i></i>
+        </div>
+      </section>
+
+      <section class="section shell" id="features">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-number">01</span>
+            <p class="eyebrow-text">Built for matchday</p>
+          </div>
+          <h2>Everything your server needs.<br /><span>Nothing it doesn't.</span></h2>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card feature-large reveal">
+            <span class="feature-index">01 / Alerts</span>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.5 21h5" /></svg></div>
+            <h3>Kickoff, before kickoff.</h3>
+            <p>Automatic reminders land in your chosen channel with local Discord timestamps, so every fan sees the right time.</p>
+            <div class="mini-notification">
+              <span>⚽</span>
+              <div><strong>Match starts in 24 hours</strong><small>Barcelona vs Arsenal · Tomorrow at 20:00</small></div>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">02 / Live</span>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3l2-7 4 13 2-6h5" /></svg></div>
+            <h3>Scores that stay current.</h3>
+            <p>One clean message updates through kickoff, live play, and the final whistle.</p>
+            <div class="score-ticker"><span>BAR</span><strong>2–1</strong><span>ARS</span><b>67'</b></div>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">03 / Routing</span>
+            <div class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h6v6H5zM13 13h6v6h-6zM11 8h4a4 4 0 0 1 4 4v1M8 11v5a3 3 0 0 0 3 3h2" /></svg></div>
+            <h3>Every team, its place.</h3>
+            <p>Route clubs to different channels and mention roles without duplicating shared fixtures.</p>
+            <div class="route-list">
+              <span><i class="crest-dot blue"></i> Barcelona <b>#barça</b></span>
+              <span><i class="crest-dot red"></i> Arsenal <b>#premier-league</b></span>
+            </div>
+          </article>
+
+          <article class="feature-card feature-wide reveal">
+            <span class="feature-index">04 / Coverage</span>
+            <div class="wide-copy">
+              <div class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg></div>
+              <div><h3>A world of football.</h3><p>Track domestic leagues, European cups, MLS, Saudi Pro League, and the top 50 men's national teams.</p></div>
+            </div>
+            <div class="coverage-orbit" aria-hidden="true">
+              <span class="orbit-center">350+</span>
+              <span class="orbit-label orbit-one">TEAMS</span>
+              <span class="orbit-label orbit-two">23 LEAGUES</span>
+              <span class="orbit-label orbit-three">NATIONS</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section command-section" id="commands">
+        <div class="shell">
+          <div class="section-heading reveal">
+            <div>
+              <span class="section-number">02</span>
+              <p class="eyebrow-text">Simple by design</p>
+            </div>
+            <h2>Set up in a few<br /><span>slash commands.</span></h2>
+          </div>
+
+          <div class="command-layout">
+            <div class="steps reveal" role="tablist" aria-label="Setup steps">
+              <button class="step is-active" role="tab" aria-selected="true" aria-controls="command-preview" data-command="/configure team:FC Barcelona" data-reply="✓ Favourite team set to FC Barcelona. Match alerts are ready.">
+                <span>01</span><div><strong>Choose your club</strong><p>Pick a favourite from the team catalog.</p></div>
+              </button>
+              <button class="step" role="tab" aria-selected="false" aria-controls="command-preview" data-command="/setchannel channel:#match-alerts" data-reply="✓ Default match alert channel set to #match-alerts.">
+                <span>02</span><div><strong>Pick a channel</strong><p>Tell Match Alert where to post.</p></div>
+              </button>
+              <button class="step" role="tab" aria-selected="false" aria-controls="command-preview" data-command="/addteam team:Arsenal" data-reply="✓ Arsenal added to this server's match alerts.">
+                <span>03</span><div><strong>Add more teams</strong><p>Follow as many supported sides as you like.</p></div>
+              </button>
+              <button class="step" role="tab" aria-selected="false" aria-controls="command-preview" data-command="/nextmatch competition:Champions League" data-reply="Next UEFA Champions League match: Barcelona vs Arsenal · Tomorrow at 20:00">
+                <span>04</span><div><strong>Ask anytime</strong><p>Check fixtures and results on demand.</p></div>
+              </button>
+            </div>
+
+            <div class="terminal-preview">
+              <div class="terminal-wrap reveal" id="command-preview">
+              <div class="terminal-bar"><span></span><span></span><span></span><small>match-alert / Discord</small></div>
+              <div class="terminal-body">
+                <p class="terminal-label">Run a command</p>
+                <div class="command-line">
+                  <span>&gt;</span><code data-command-text>/configure team:FC Barcelona</code>
+                  <button type="button" class="copy-command" aria-label="Copy command" title="Copy command">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"/><path d="M14 6V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1" /></svg>
+                  </button>
+                </div>
+                <div class="terminal-divider"></div>
+                <div class="bot-reply">
+                  <span class="reply-mark" aria-hidden="true">
+                    <svg viewBox="0 0 64 64">
+                      <path d="M32 9 53 21v24L32 57 11 45V21Z" fill="currentColor" />
+                      <path d="m32 19 4.5 8.7 9.6 1.4-6.9 6.8 1.6 9.5-8.8-4.5-8.8 4.5 1.6-9.5-6.9-6.8 9.6-1.4Z" fill="#0d110f" />
+                    </svg>
+                  </span>
+                  <div><p><strong>Match Alert</strong><b>APP</b></p><span data-reply-text>✓ Favourite team set to FC Barcelona. Match alerts are ready.</span></div>
+                </div>
+              </div>
+              <div class="terminal-footer"><span><i></i> Bot online</span><span>Response · only you can see this</span></div>
+              </div>
+              </div>
+              <p class="mockup-disclaimer">Mockup of the Discord UI for demonstration purposes.</p>
+            </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="coverage">
+        <div class="coverage-heading reveal">
+          <span class="section-number">03</span>
+          <div><p class="eyebrow-text">Your league is here</p><h2>From local rivalries<br />to European nights.</h2></div>
+          <p>Match Alert follows the competitions fans care about, with team aliases and autocomplete that make every command fast.</p>
+        </div>
+        <div class="league-grid reveal">
+          <div><strong>ENG</strong><span>Premier League</span><small>+ Championship · FA Cup</small></div>
+          <div><strong>ESP</strong><span>La Liga</span><small>+ La Liga 2 · Copa del Rey</small></div>
+          <div><strong>GER</strong><span>Bundesliga</span><small>+ 2. Bundesliga · DFB-Pokal</small></div>
+          <div><strong>ITA</strong><span>Serie A</span><small>+ Serie B · Coppa Italia</small></div>
+          <div><strong>FRA</strong><span>Ligue 1</span><small>+ Ligue 2 · Coupe de France</small></div>
+          <div><strong>UEFA</strong><span>European cups</span><small>Champions League · Europa · Conference</small></div>
+          <div><strong>USA</strong><span>MLS</span><small>Eastern · Western Conference</small></div>
+          <div><strong>SAU</strong><span>Saudi Pro League</span><small>King Cup · Saudi Super Cup</small></div>
+          <div><strong>NED</strong><span>Eredivisie</span><small>KNVB Cup · Eerste Divisie</small></div>
+          <div><strong>POR</strong><span>Liga Portugal</span><small>Taça de Portugal · Liga 2</small></div>
+        </div>
+      </section>
+
+      <section class="cta shell reveal">
+        <div class="cta-lines" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="eyebrow"><span class="pulse"></span> Ready for kickoff?</div>
+        <h2>Bring matchday<br />to your server.</h2>
+        <p>Add Match Alert in seconds. Your next fixture is already waiting.</p>
+        <a
+          class="button button-light"
+          href="https://discord.com/oauth2/authorize?client_id=1548667872451100682&amp;permissions=19456&amp;integration_type=0&amp;scope=bot%20applications.commands"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Add Match Alert
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5" /></svg>
+        </a>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-inner">
+        <a class="brand" href="#top">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 2.5 31 10v16L18 33.5 5 26V10Z" fill="currentColor"/><path d="m18 9 3 5.7 6.3.9-4.6 4.5 1.1 6.4-5.8-3-5.8 3 1.1-6.4-4.6-4.5 6.3-.9Z" fill="#090c0b"/></svg></span>
+          <span>Match Alert</span>
+        </a>
+        <p>Football alerts, built for Discord.</p>
+        <div class="footer-links">
+          <a href="https://github.com/BarcaBoy109/match-alert" target="_blank" rel="noreferrer">Source</a>
+          <a href="https://github.com/BarcaBoy109/match-alert#discord-commands" target="_blank" rel="noreferrer">Docs</a>
+          <a href="https://github.com/BarcaBoy109/match-alert/issues" target="_blank" rel="noreferrer">Support</a>
+        </div>
+        <small>© <span data-year>2026</span> Match Alert. Open source under MIT.</small>
+      </div>
+    </footer>
+  </body>
+</html>
