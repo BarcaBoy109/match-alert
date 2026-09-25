@@ -4,7 +4,7 @@ import logging
 import math
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 
@@ -18,8 +18,8 @@ from dotenv import load_dotenv
 
 from teams import (
     ALIASES,
-    COMPETITIONS,
     COMPETITION_ALIASES,
+    COMPETITIONS,
     TEAMS,
     find_competition,
     find_team,
@@ -46,6 +46,154 @@ PORT = int(os.getenv("PORT", "8080"))
 # ESPN's public scoreboard endpoint. DEFAULT_TEAM_ID selects the fallback team to monitor.
 SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
 COMPETITION_SCOREBOARD_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/{competition}/scoreboard"
+ESPN_MAX_CONCURRENCY = max(1, int(os.getenv("ESPN_MAX_CONCURRENCY", "4")))
+ESPN_LIVE_CACHE_SECONDS = max(1, int(os.getenv("ESPN_LIVE_CACHE_SECONDS", "60")))
+ESPN_FUTURE_CACHE_SECONDS = max(1, int(os.getenv("ESPN_FUTURE_CACHE_SECONDS", "600")))
+ESPN_RECENT_CACHE_SECONDS = max(1, int(os.getenv("ESPN_RECENT_CACHE_SECONDS", "3600")))
+ESPN_HISTORICAL_CACHE_SECONDS = max(1, int(os.getenv("ESPN_HISTORICAL_CACHE_SECONDS", "86400")))
+ESPN_STALE_IF_ERROR_SECONDS = max(0, int(os.getenv("ESPN_STALE_IF_ERROR_SECONDS", "1800")))
+
+
+def scoreboard_cache_ttl(day: date, today: date | None = None) -> int:
+    """Return a freshness window suited to live, upcoming, and historical data."""
+    today = today or datetime.now(timezone.utc).date()
+    distance = (day - today).days
+    if distance == 0:
+        return ESPN_LIVE_CACHE_SECONDS
+    if distance > 0:
+        return ESPN_FUTURE_CACHE_SECONDS
+    if distance == -1:
+        return ESPN_RECENT_CACHE_SECONDS
+    return ESPN_HISTORICAL_CACHE_SECONDS
+
+
+class EspnClient:
+    """Share ESPN connections and coalesce cached per-day scoreboard requests."""
+
+    def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
+        self.session = session
+        self._owns_session = session is None
+        self._semaphore = asyncio.Semaphore(ESPN_MAX_CONCURRENCY)
+        self._cache: dict[tuple[str, str], dict] = {}
+        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self.upstream_requests = 0
+        self.stale_responses = 0
+
+    async def start(self) -> None:
+        if self.session is None or getattr(self.session, "closed", False):
+            self.session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=20),
+                connector=aiohttp.TCPConnector(limit=8, ttl_dns_cache=300),
+            )
+            self._owns_session = True
+
+    async def close(self) -> None:
+        if (
+            self._owns_session
+            and self.session is not None
+            and not getattr(self.session, "closed", False)
+        ):
+            await self.session.close()
+        self.session = None
+
+    def stats(self) -> dict[str, int]:
+        return {
+            "hits": self.cache_hits,
+            "misses": self.cache_misses,
+            "upstream": self.upstream_requests,
+            "stale": self.stale_responses,
+            "entries": len(self._cache),
+        }
+
+    def _prune(self, now: float) -> None:
+        if len(self._cache) < 256:
+            return
+        expired = [
+            key
+            for key, entry in self._cache.items()
+            if entry["stale_until"] <= now
+        ]
+        for key in expired:
+            self._cache.pop(key, None)
+            lock = self._locks.get(key)
+            if lock is not None and not lock.locked():
+                self._locks.pop(key, None)
+
+    async def scoreboard(self, day: date, competition_code: str | None = None) -> dict:
+        """Fetch one scoreboard day, returning a fresh or safely stale cached payload."""
+        if self.session is None:
+            await self.start()
+
+        competition = competition_code or "all"
+        key = (competition, day.isoformat())
+        now = asyncio.get_running_loop().time()
+        cached = self._cache.get(key)
+        if cached is not None and cached["expires_at"] > now:
+            self.cache_hits += 1
+            return cached["payload"]
+
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            now = asyncio.get_running_loop().time()
+            cached = self._cache.get(key)
+            if cached is not None and cached["expires_at"] > now:
+                self.cache_hits += 1
+                return cached["payload"]
+
+            self.cache_misses += 1
+            scoreboard_url = (
+                COMPETITION_SCOREBOARD_URL.format(competition=competition_code)
+                if competition_code
+                else SCOREBOARD_URL
+            )
+            try:
+                async with self._semaphore:
+                    self.upstream_requests += 1
+                    async with self.session.get(
+                        scoreboard_url,
+                        params={"limit": 500, "dates": day.strftime("%Y%m%d")},
+                    ) as response:
+                        if response.status >= 400:
+                            body = await response.text()
+                            logger.error(
+                                "ESPN scoreboard request failed: %s %s: %s",
+                                response.status,
+                                day.strftime("%Y%m%d"),
+                                body[:500],
+                            )
+                            response.raise_for_status()
+                        payload = await response.json()
+            except (aiohttp.ClientError, asyncio.TimeoutError):
+                now = asyncio.get_running_loop().time()
+                if cached is not None and cached["stale_until"] > now:
+                    self.stale_responses += 1
+                    logger.warning(
+                        "Using stale ESPN scoreboard data for %s (%s) after request failure",
+                        day.isoformat(),
+                        competition,
+                    )
+                    return cached["payload"]
+                raise
+
+            now = asyncio.get_running_loop().time()
+            ttl = scoreboard_cache_ttl(day)
+            self._cache[key] = {
+                "payload": payload,
+                "expires_at": now + ttl,
+                "stale_until": now + ttl + ESPN_STALE_IF_ERROR_SECONDS,
+            }
+            self._prune(now)
+            return payload
+
+    async def scoreboards(
+        self, days: list[date], competition_code: str | None = None
+    ) -> list[dict]:
+        """Fetch independent scoreboard dates concurrently within the shared limit."""
+        return await asyncio.gather(
+            *(self.scoreboard(day, competition_code) for day in days)
+        )
 
 
 def postgres_datetime(value: datetime | str | None) -> datetime | None:
@@ -855,6 +1003,7 @@ async def nextmatch_command(
     """Show the next match for a team or in a supported competition within seven days."""
     await interaction.response.defer(ephemeral=True)
     try:
+        espn_client = getattr(interaction.client, "espn", None)
         if team is not None and competition is not None:
             await interaction.edit_original_response(
                 content="Choose either a team or a competition, not both."
@@ -869,7 +1018,7 @@ async def nextmatch_command(
                 )
                 return
             competition_name, competition_code = selected_competition
-            match = await fetch_next_competition_match(competition_code)
+            match = await fetch_next_competition_match(competition_code, espn_client)
             if not match:
                 content = f"No {competition_name} match was found in the next 7 days."
             else:
@@ -894,7 +1043,7 @@ async def nextmatch_command(
             team_id = str(settings.get("team_id", DEFAULT_TEAM_ID))
             team_name = settings.get("team_name", DEFAULT_TEAM_NAME)
 
-        match = (await fetch_next_matches([team_id]))[team_id]
+        match = (await fetch_next_matches([team_id], espn_client))[team_id]
         if not match:
             content = f"No {team_name} match was found in the next 7 days."
         else:
@@ -916,38 +1065,45 @@ async def nextmatch_command(
         )
 
 
-async def fetch_next_competition_match(competition_code: str) -> dict | None:
+async def fetch_next_competition_match(
+    competition_code: str, espn_client: EspnClient | None = None
+) -> dict | None:
     """Fetch the earliest upcoming fixture for a supported ESPN competition."""
-    events = await fetch_upcoming_events(competition_code=competition_code)
+    events = await fetch_upcoming_events(
+        competition_code=competition_code, espn_client=espn_client
+    )
     return min(events, key=lambda event: event["date"], default=None)
 
 
-async def fetch_upcoming_events(competition_code: str | None = None) -> list[dict]:
-    """Fetch upcoming ESPN fixtures, optionally scoped to one competition."""
+async def fetch_scoreboard_days(
+    days: list[date],
+    competition_code: str | None = None,
+    espn_client: EspnClient | None = None,
+) -> list[dict]:
+    """Use the bot cache when available, or one temporary pooled session otherwise."""
+    if espn_client is not None:
+        return await espn_client.scoreboards(days, competition_code)
     timeout = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        temporary_client = EspnClient(session=session)
+        return await temporary_client.scoreboards(days, competition_code)
+
+
+async def fetch_upcoming_events(
+    competition_code: str | None = None,
+    espn_client: EspnClient | None = None,
+) -> list[dict]:
+    """Fetch upcoming ESPN fixtures, optionally scoped to one competition."""
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(days=7)
-    scoreboard_url = (
-        COMPETITION_SCOREBOARD_URL.format(competition=competition_code)
-        if competition_code
-        else SCOREBOARD_URL
-    )
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        # ESPN's soccer scoreboard endpoint accepts a single date reliably;
-        # date ranges can return HTTP 400 on the soccer feed.
-        payloads = []
-        day = now.date()
-        while day <= cutoff.date():
-            date = day.strftime("%Y%m%d")
-            async with session.get(
-                scoreboard_url, params={"limit": 500, "dates": date}
-            ) as response:
-                if response.status >= 400:
-                    body = await response.text()
-                    logger.error("ESPN scoreboard request failed: %s %s: %s", response.status, date, body[:500])
-                    response.raise_for_status()
-                payloads.append(await response.json())
-            day += timedelta(days=1)
+    # ESPN's soccer scoreboard endpoint accepts one date reliably. Fetch those
+    # independent dates concurrently while the client enforces a safe limit.
+    days = []
+    day = now.date()
+    while day <= cutoff.date():
+        days.append(day)
+        day += timedelta(days=1)
+    payloads = await fetch_scoreboard_days(days, competition_code, espn_client)
 
     upcoming_events = []
     for payload in payloads:
@@ -961,7 +1117,9 @@ async def fetch_upcoming_events(competition_code: str | None = None) -> list[dic
     return upcoming_events
 
 
-async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
+async def fetch_next_matches(
+    team_ids: list[str], espn_client: EspnClient | None = None
+) -> dict[str, dict | None]:
     """Fetch each requested team's next upcoming ESPN fixture in one request."""
     team_ids = [str(team_id) for team_id in team_ids]
     next_matches = dict.fromkeys(team_ids)
@@ -969,10 +1127,22 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
     if not team_ids:
         return next_matches
 
-    for event in await fetch_upcoming_events():
+    wanted_team_ids = set(team_ids)
+    for event in await fetch_upcoming_events(espn_client=espn_client):
         start = datetime.fromisoformat(event["date"].replace("Z", "+00:00"))
-        for team_id in next_matches:
-            if event_has_team(event, team_id) and (
+        numeric_event_ids = {
+            str(item.get("team", {}).get("id"))
+            for item in event.get("competitions", [{}])[0].get("competitors", [])
+            if item.get("team", {}).get("id") is not None
+        }
+        matching_ids = wanted_team_ids.intersection(numeric_event_ids)
+        matching_ids.update(
+            team_id
+            for team_id in wanted_team_ids
+            if team_id.startswith("international:") and event_has_team(event, team_id)
+        )
+        for team_id in matching_ids:
+            if (
                 team_id not in next_match_starts or start < next_match_starts[team_id]
             ):
                 next_matches[team_id] = event
@@ -980,60 +1150,50 @@ async def fetch_next_matches(team_ids: list[str]) -> dict[str, dict | None]:
     return next_matches
 
 
-async def fetch_recent_events(match_ids: list[str]) -> dict[str, dict]:
+async def fetch_recent_events(
+    match_ids: list[str], espn_client: EspnClient | None = None
+) -> dict[str, dict]:
     """Fetch recently started events so sent reminders can show live results."""
     match_ids = {str(match_id) for match_id in match_ids}
     if not match_ids:
         return {}
-    timeout = aiohttp.ClientTimeout(total=20)
     now = datetime.now(timezone.utc)
     start = now - timedelta(hours=REMINDER_RETENTION_HOURS + 24)
     end = now + timedelta(days=1)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        # The soccer scoreboard rejects date ranges (for example, 20260919-20260920)
-        # with HTTP 400. Query individual days, as we do for upcoming fixtures.
-        events = {}
-        day = start.date()
-        while day <= end.date():
-            async with session.get(
-                SCOREBOARD_URL, params={"limit": 500, "dates": day.strftime("%Y%m%d")}
-            ) as response:
-                if response.status >= 400:
-                    body = await response.text()
-                    logger.error(
-                        "ESPN recent-score request failed: %s %s: %s",
-                        response.status,
-                        day,
-                        body[:500],
-                    )
-                    response.raise_for_status()
-                payload = await response.json()
-            events.update(
-                {
-                    str(event["id"]): event
-                    for event in payload.get("events", [])
-                    if str(event.get("id")) in match_ids
-                }
-            )
-            day += timedelta(days=1)
+    days = []
+    day = start.date()
+    while day <= end.date():
+        days.append(day)
+        day += timedelta(days=1)
+    payloads = await fetch_scoreboard_days(days, espn_client=espn_client)
+    events = {}
+    for payload in payloads:
+        events.update(
+            {
+                str(event["id"]): event
+                for event in payload.get("events", [])
+                if str(event.get("id")) in match_ids
+            }
+        )
     return events
 
 
-async def fetch_recent_results(team_id: str, days: int = 30, limit: int = 10) -> list[dict]:
+async def fetch_recent_results(
+    team_id: str,
+    days: int = 30,
+    limit: int = 10,
+    espn_client: EspnClient | None = None,
+) -> list[dict]:
     """Fetch completed, non-exceptional results for a supported team."""
-    timeout = aiohttp.ClientTimeout(total=8)
     now = datetime.now(timezone.utc)
     events = {}
-    deadline = asyncio.get_running_loop().time() + 8
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        for offset in range(days):
-            if asyncio.get_running_loop().time() >= deadline:
-                break
-            day = (now.date() - timedelta(days=offset)).strftime("%Y%m%d")
-            async with session.get(SCOREBOARD_URL, params={"limit": 500, "dates": day}) as response:
-                if response.status >= 400:
-                    response.raise_for_status()
-                payload = await response.json()
+    requested_days = [now.date() - timedelta(days=offset) for offset in range(days)]
+    # Work newest-first in small parallel batches. Most teams reach the requested
+    # result limit without downloading all 30 days.
+    for offset in range(0, len(requested_days), ESPN_MAX_CONCURRENCY):
+        batch = requested_days[offset : offset + ESPN_MAX_CONCURRENCY]
+        payloads = await fetch_scoreboard_days(batch, espn_client=espn_client)
+        for payload in payloads:
             for event in payload.get("events", []):
                 event_id = event.get("id")
                 if not event_id or not event_has_team(event, str(team_id)) or event_phase(event) != "final":
@@ -1045,8 +1205,8 @@ async def fetch_recent_results(team_id: str, days: int = 30, limit: int = 10) ->
                 except (KeyError, TypeError, ValueError):
                     continue
                 events[str(event_id)] = (start, event)
-            if len(events) >= limit:
-                break
+        if len(events) >= limit:
+            break
     return [event for _, event in sorted(events.values(), key=lambda pair: pair[0], reverse=True)[:limit]]
 
 
@@ -1162,7 +1322,11 @@ async def results_command(interaction: discord.Interaction, team: str | None = N
             await interaction.edit_original_response(content="That team is not in the supported team lookup.")
             return
         name, team_id = selected
-        results = await fetch_recent_results(team_id, limit=limit)
+        results = await fetch_recent_results(
+            team_id,
+            limit=limit,
+            espn_client=getattr(interaction.client, "espn", None),
+        )
         content = f"**{name} results — last 30 days**\n" + ("\n".join(format_result(event) for event in results) if results else "No completed results found.")
         await interaction.edit_original_response(content=content[:1900])
     except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -1261,12 +1425,15 @@ class ServiceStatus:
         connected = self.bot is not None and self.bot.is_ready()
         remaining = self.cooldown.remaining
         ready = connected and remaining == 0 and self.bot._commands_synced
-        return {
+        payload = {
             "ok": ready, "service": "match-alert", "discord_ready": ready,
             "discord_connected": connected,
             "status": "rate_limited" if remaining else "ready" if ready else "connecting",
             "retry_after_seconds": math.ceil(remaining),
         }
+        if self.bot is not None and hasattr(self.bot, "espn"):
+            payload["espn_cache"] = self.bot.espn.stats()
+        return payload
 
 
 STATUS_KEY = web.AppKey("service_status", ServiceStatus)
@@ -1334,6 +1501,7 @@ class MatchAlertBot(commands.Bot):
             http_trace=self.cooldown.trace_config(),
         )
         self.store = StateStore()
+        self.espn = EspnClient()
         self.tree.add_command(setchannel_command)
         self.tree.add_command(setrole_command)
         self.tree.add_command(resetalerts_command)
@@ -1350,6 +1518,7 @@ class MatchAlertBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Connect storage and initialize Discord-specific background work."""
         await self.store.connect()
+        await self.espn.start()
         await sync_commands_if_changed(self.tree)
         self.poll_schedule.start()
 
@@ -1392,6 +1561,7 @@ class MatchAlertBot(commands.Bot):
         try:
             await super().close()
         finally:
+            await self.espn.close()
             if self.store.pool is not None:
                 pool, self.store.pool = self.store.pool, None
                 try:
@@ -1438,7 +1608,7 @@ class MatchAlertBot(commands.Bot):
         """Update sent reminders with live scores and final results."""
         reminders = await self.store.get_pending_reminders()
         match_ids = [reminder["match_id"].split(":", 1)[1] for reminder in reminders]
-        events = await fetch_recent_events(match_ids)
+        events = await fetch_recent_events(match_ids, self.espn)
         guilds = {guild.id: guild for guild in self.guilds}
         for reminder in reminders:
             announced_id = reminder["match_id"]
@@ -1493,7 +1663,7 @@ class MatchAlertBot(commands.Bot):
                 guild_configs.append((guild, guild_state, teams))
                 all_team_ids.update(team_id for _, team_id in teams)
 
-            matches = await fetch_next_matches(list(all_team_ids))
+            matches = await fetch_next_matches(list(all_team_ids), self.espn)
             for guild, guild_state, teams in guild_configs:
                 destinations = {}
                 for team_name, team_id in teams:

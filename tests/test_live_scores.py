@@ -1,6 +1,7 @@
+import asyncio
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import bot
@@ -43,6 +44,25 @@ class _Session:
         return _Response()
 
 
+class _CachingResponse(_Response):
+    async def json(self):
+        await asyncio.sleep(0)
+        return await super().json()
+
+
+class _CachingSession(_Session):
+    def __init__(self, **kwargs):
+        self.request_count = 0
+        self.fail = False
+        self.closed = False
+
+    def get(self, url, *, params):
+        self.request_count += 1
+        if self.fail:
+            raise bot.aiohttp.ClientError("temporary failure")
+        return _CachingResponse()
+
+
 class FetchRecentEventsTests(unittest.IsolatedAsyncioTestCase):
     async def test_queries_each_scoreboard_date_individually(self):
         original_session = bot.aiohttp.ClientSession
@@ -56,6 +76,45 @@ class FetchRecentEventsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events, {"42": {"id": "42"}})
         self.assertGreaterEqual(len(_Session.requested_dates), 2)
         self.assertTrue(all("-" not in date for date in _Session.requested_dates))
+
+
+class EspnCacheTests(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_requests_share_one_upstream_response(self):
+        session = _CachingSession()
+        client = bot.EspnClient(session=session)
+        day = datetime.now(timezone.utc).date()
+
+        first, second = await asyncio.gather(
+            client.scoreboard(day),
+            client.scoreboard(day),
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(session.request_count, 1)
+        self.assertEqual(client.stats()["upstream"], 1)
+        self.assertEqual(client.stats()["hits"], 1)
+
+    async def test_expired_response_is_used_during_temporary_failure(self):
+        session = _CachingSession()
+        client = bot.EspnClient(session=session)
+        day = datetime.now(timezone.utc).date()
+        payload = await client.scoreboard(day)
+        key = ("all", day.isoformat())
+        client._cache[key]["expires_at"] = asyncio.get_running_loop().time() - 1
+        client._cache[key]["stale_until"] = asyncio.get_running_loop().time() + 60
+        session.fail = True
+
+        stale = await client.scoreboard(day)
+
+        self.assertEqual(stale, payload)
+        self.assertEqual(client.stats()["stale"], 1)
+
+    def test_historical_scoreboards_receive_longer_ttls(self):
+        today = datetime.now(timezone.utc).date()
+        self.assertGreater(
+            bot.scoreboard_cache_ttl(today - timedelta(days=2), today),
+            bot.scoreboard_cache_ttl(today, today),
+        )
 
 
 class NationalTeamTests(unittest.TestCase):

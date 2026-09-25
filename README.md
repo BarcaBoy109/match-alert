@@ -81,6 +81,12 @@ DISCORD_TOKEN=your-bot-token
 DEFAULT_TEAM_ID=83
 DEFAULT_TEAM_NAME=FC Barcelona
 POLL_MINUTES=10
+ESPN_MAX_CONCURRENCY=4
+ESPN_LIVE_CACHE_SECONDS=60
+ESPN_FUTURE_CACHE_SECONDS=600
+ESPN_RECENT_CACHE_SECONDS=3600
+ESPN_HISTORICAL_CACHE_SECONDS=86400
+ESPN_STALE_IF_ERROR_SECONDS=1800
 STATE_FILE=state.json
 DATABASE_URL=postgresql://...
 PORT=8080
@@ -89,6 +95,8 @@ PORT=8080
 `DEFAULT_TEAM_ID` and `DEFAULT_TEAM_NAME` are fallback values for servers that have not configured a favourite. Existing deployments using `TEAM_ID` and `TEAM_NAME` remain supported. Never commit `.env`, `DISCORD_TOKEN`, or `DATABASE_URL`.
 
 `REMINDER_RETENTION_HOURS` controls when sent reminders are deleted after kickoff. It defaults to `3`, allowing time for a normal match to finish.
+
+ESPN scoreboard responses are cached in memory by competition and UTC date. Today's data is cached for 60 seconds, upcoming fixtures for 10 minutes, yesterday's data for one hour, and older results for one day. Independent dates are fetched concurrently with a default limit of four requests. During a temporary ESPN failure, recently expired data can be reused for up to 30 minutes. These values can be tuned with the `ESPN_*` variables above. The cache belongs to the running bot process and resets when it restarts.
 
 ## Deployment health and Discord rate limits
 
@@ -102,7 +110,8 @@ Use `/health` or `/ready` for external availability monitoring, such as
 UptimeRobot. They return HTTP 503 while Discord is disconnected, command setup
 is incomplete, or an IP/global cooldown is active. The JSON response includes
 `discord_connected`, `discord_ready`, `status`, and `retry_after_seconds`.
-They return HTTP 200 once the bot is ready. Do not use these readiness endpoints
+When the bot client exists, it also includes cumulative `espn_cache` hit, miss,
+upstream-request, stale-response, and entry counts. They return HTTP 200 once the bot is ready. Do not use these readiness endpoints
 as a host restart trigger.
 
 Discord global and edge/IP 429 responses pause subsequent Discord HTTP requests
