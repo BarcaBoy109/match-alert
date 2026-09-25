@@ -51,6 +51,8 @@ insert into public.alert_deliveries (guild_id, event_id, channel_id, message_id,
 select split_part(match_id, ':', 1)::bigint, split_part(match_id, ':', 2), channel_id, message_id, delete_after
 from public.announced_matches
 where channel_id is not null
+  and split_part(match_id, ':', 1) ~ '^[0-9]+$'
+  and split_part(match_id, ':', 2) <> ''
 on conflict (guild_id, event_id, channel_id) do nothing;
 
 create table if not exists public.match_lifecycle (
@@ -62,3 +64,10 @@ create table if not exists public.match_lifecycle (
   observed_at timestamptz not null default now(),
   primary key (guild_id, event_id)
 );
+
+create index if not exists match_lifecycle_observed_at_idx
+  on public.match_lifecycle (observed_at);
+
+create index if not exists alert_deliveries_delete_after_idx
+  on public.alert_deliveries (delete_after)
+  where delete_after is not null;

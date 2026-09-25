@@ -1,7 +1,24 @@
 .env
+.env.*
+!.env.example
 state.json
+
+# Python bytecode, environments, and tool caches
 __pycache__/
 *.py[cod]
 venv/
 .venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Historical local upgrade scripts; the current baseline lives in the schema files
 supabase/migrations/

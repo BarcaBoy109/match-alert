@@ -2,7 +2,19 @@
 
 A Discord bot that monitors soccer fixtures and posts match alerts in a configured channel. Each server can choose a favourite team and save additional teams for alerts. It defaults to FC Barcelona.
 
+**[View the showcase →](https://barcaboy109.github.io/match-alert/)**
+
 [![Invite Match Alert to Discord](https://img.shields.io/badge/Invite%20Match%20Alert-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1548667872451100682&permissions=19456&integration_type=0&scope=bot%20applications.commands)
+
+## Showcase site
+
+The static showcase lives in [`docs/`](docs/) and deploys through [`.github/workflows/pages.yml`](.github/workflows/pages.yml) whenever site files change on `main`. For the first deployment, set **Settings → Pages → Source** to **GitHub Actions** in the repository.
+
+Preview it locally with:
+
+```powershell
+python -m http.server 8000 --directory docs
+```
 
 ## Discord commands
 
@@ -42,7 +54,7 @@ Example:
 
 The favourite cannot be removed. Configure a different favourite first if needed. Duplicate teams are ignored, including aliases that resolve to the same club. `/nextmatch` accepts either a team or a competition, but not both.
 
-Team options provide local autocomplete for canonical names and aliases. Per-team routing inherits the server channel and role independently unless an override is set. Exceptional ESPN statuses are labelled separately from final results. For a new Supabase project, run the complete `supabase/full_schema.sql`; for an existing project, use the standalone migration under `supabase/migrations/`. The schema was verified against a disposable local PostgreSQL 17 cluster. The user's Supabase instance was not independently inspected.
+Team options provide local autocomplete for canonical names and aliases. Per-team routing inherits the server channel and role independently unless an override is set. Exceptional ESPN statuses are labelled separately from final results. The complete `supabase/full_schema.sql` is the current database baseline and includes team routing, lifecycle tracking, delivery records, backfills, and maintenance indexes without requiring separate migrations. The schema was verified against a disposable local PostgreSQL 17 cluster. The user's Supabase instance was not independently inspected.
 
 ## Local setup
 
@@ -118,10 +130,10 @@ While a saved alert is active, the bot updates its message with the live score a
 The bot requires a long-running process for Discord's Gateway connection. Railway, Render, Fly.io, or another container host can run it.
 
 1. Create a Supabase project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL Editor. For an existing deployment, rerun it to create `guild_teams` and migrate current single-team settings.
+2. Run [`supabase/full_schema.sql`](supabase/full_schema.sql) in the Supabase SQL Editor. It contains the complete current schema and is safe to run repeatedly.
 3. Copy the Supabase **Session pooler** connection string into `DATABASE_URL`.
 4. Deploy the repository and set `DISCORD_TOKEN`, `DATABASE_URL`, and optionally `POLL_MINUTES` in the host's environment settings.
 
 Supabase stores server settings, announced fixtures, and reminder message IDs when `DATABASE_URL` is configured; local `state.json` is not used for those records. The bot needs permission to view and delete messages in the alert channel.
 
-To upgrade an existing non-production database, review and apply `supabase/schema.sql` with that database's normal migration tool. The script is additive and repeatable: it adds team routing columns, lifecycle tracking, and `alert_deliveries`, then copies legacy announcements with known channels into per-destination delivery rows. Verify the resulting tables and indexes before starting the bot. Do not run this against production without a backup and change approval.
+[`supabase/schema.sql`](supabase/schema.sql) is retained as an additive, repeatable compatibility script for an older local database. New deployments only need `supabase/full_schema.sql`. Verify database changes before starting the bot, and do not apply them to production without a backup and change approval.
