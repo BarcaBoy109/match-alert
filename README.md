@@ -5,6 +5,7 @@ A Discord bot that monitors soccer fixtures and posts match alerts in a configur
 **[View the showcase →](https://barcaboy109.github.io/match-alert/)**
 
 [![Invite Match Alert to Discord](https://img.shields.io/badge/Invite%20Match%20Alert-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1548667872451100682&permissions=19456&integration_type=0&scope=bot%20applications.commands)
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor-GitHub-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/BarcaBoy109)
 
 ## Showcase site
 
