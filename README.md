@@ -101,8 +101,8 @@ ESPN scoreboard responses are cached in memory by competition and UTC date. Toda
 
 ## Deployment health and Discord rate limits
 
-Configure Render's **Health Check Path** as `/live` (or retain its TCP port check).
-Do this before deploying this version if Render currently checks `/health`.
+Azure's infrastructure probes use `/live`. If deploying to Render, configure its
+**Health Check Path** as `/live` (or retain its TCP port check).
 `/` and `/live` return HTTP 200 while the process is alive, including during a
 Discord cooldown. This prevents the host from restarting the process and making
 another premature login attempt.
@@ -135,7 +135,13 @@ kept up to date for compatibility; new servers use the global commands.
 
 While a saved alert is active, the bot updates its message with the live score and then the final result before deleting it after the retention period. See [`FUTURE_PLAN.md`](FUTURE_PLAN.md) for planned improvements.
 
-## Supabase and Railway
+## Azure and Supabase
+
+The backend is configured for an always-running Azure Container App, with the
+existing Supabase database and GitHub Pages showcase. See
+[`azure/README.md`](azure/README.md) for deployment, cutover, monitoring, and rollback.
+
+### Database setup and alternative hosts
 
 The bot requires a long-running process for Discord's Gateway connection. Railway, Render, Fly.io, or another container host can run it.
 

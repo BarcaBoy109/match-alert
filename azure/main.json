@@ -1,0 +1,86 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "type": "string", "defaultValue": "[resourceGroup().location]" },
+    "appName": { "type": "string", "defaultValue": "match-alert" },
+    "image": { "type": "string" },
+    "discordToken": { "type": "securestring" },
+    "databaseUrl": { "type": "securestring" },
+    "pollMinutes": { "type": "string", "defaultValue": "10" },
+    "discordNotBefore": { "type": "string", "defaultValue": "4102444800" }
+  },
+  "variables": { "environmentName": "[concat(parameters('appName'), '-env')]" },
+  "resources": [
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('environmentName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": { "destination": "" },
+        "workloadProfiles": [ { "name": "Consumption", "workloadProfileType": "Consumption" } ]
+      }
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2025-01-01",
+      "name": "[parameters('appName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [ "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]" ],
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('environmentName'))]",
+        "workloadProfileName": "Consumption",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "transport": "http",
+            "allowInsecure": false
+          },
+          "secrets": [
+            { "name": "discord-token", "value": "[parameters('discordToken')]" },
+            { "name": "database-url", "value": "[parameters('databaseUrl')]" }
+          ]
+        },
+        "template": {
+          "containers": [ {
+            "name": "bot",
+            "image": "[parameters('image')]",
+            "resources": { "cpu": 0.25, "memory": "0.5Gi" },
+            "env": [
+              { "name": "DISCORD_TOKEN", "secretRef": "discord-token" },
+              { "name": "DATABASE_URL", "secretRef": "database-url" },
+              { "name": "POLL_MINUTES", "value": "[parameters('pollMinutes')]" },
+              { "name": "DISCORD_NOT_BEFORE", "value": "[parameters('discordNotBefore')]" },
+              { "name": "PORT", "value": "8080" },
+              { "name": "PYTHONUNBUFFERED", "value": "1" }
+            ],
+            "probes": [
+              {
+                "type": "Startup", "httpGet": { "path": "/live", "port": 8080 },
+                "periodSeconds": 5, "timeoutSeconds": 3, "failureThreshold": 30
+              },
+              {
+                "type": "Liveness", "httpGet": { "path": "/live", "port": 8080 },
+                "periodSeconds": 30, "timeoutSeconds": 5, "failureThreshold": 3
+              },
+              {
+                "type": "Readiness", "httpGet": { "path": "/live", "port": 8080 },
+                "periodSeconds": 10, "timeoutSeconds": 5, "failureThreshold": 3
+              }
+            ]
+          } ],
+          "scale": { "minReplicas": 1, "maxReplicas": 1, "rules": [] }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "value": "[concat('https://', reference(resourceId('Microsoft.App/containerApps', parameters('appName')), '2025-01-01').configuration.ingress.fqdn)]"
+    }
+  }
+}
