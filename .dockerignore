@@ -3,3 +3,10 @@
 state.json
 __pycache__
 *.pyc
+.venv
+venv
+.azure
+.deploy
+.github
+tests
+docs
